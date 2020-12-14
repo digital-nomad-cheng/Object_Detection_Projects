@@ -1,2 +1,2 @@
 # Object_Detection_Projects
-Notes and assignment solutions for Deep Learning for Object Detection Course at: https://www.shenlanxueyuan.com/course/250
+Notes and assignment solutions for Deep Learning for Object Detection course at: https://www.shenlanxueyuan.com/course/250
