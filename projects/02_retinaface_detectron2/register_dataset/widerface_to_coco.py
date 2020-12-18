@@ -137,7 +137,7 @@ def main(args):
     print("There are {} annotations".format(ann_id - 1))
             
     # Save translated coco annotations
-    save_dir = osp.dirname(args.wface)
+    save_dir = osp.dirname(args.ann_file)
     save_file = osp.join(save_dir, "widerface_coco.json")
     with open(save_file, 'w') as w_obj:
         json.dump(coco_output, w_obj)
