@@ -30,14 +30,14 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
 
 1. build model: 整个网络 forward 的核心逻辑在 rcnn.py 里面 
     + build resnet: resnet 作为 backbone 特征提取器，输出特征对应 
-        ```
+        ```python
         bottom_up = build_resnet_backbone(cfg, input_shape)
         ```
     + build fpn: \
       fpn 使用 resnet 输出的特征, 构建 feature pyramid。 \
       cfg.MODEL.FPN.IN_FEATURES 和 cfg.MODEL.RESNET.OUT_FEATURES 对应。 \
       LastLevelMaxPool() 是在原始 resnet 输出特征之上在通过 max pool 叠加一个 stride 2 feature map。
-        ```
+        ```python
         backbone = FPN(
             bottom_up=bottom_up,
             in_features=in_features,
@@ -48,8 +48,9 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
         )
         ```
      + build rpn: 
-       rpn architecture according to the paper. In the paper the objectness score is num_anchors*2, \
-       while in detectron2 implementation is numm_anchors
+       rpn architecture according to the paper. \
+       **In the paper the objectness score is num_anchors*2,
+       while in detectron2 implementation is numm_anchors.**
        ```python
         # 3x3 conv for the hidden representation
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
@@ -60,16 +61,16 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
        ```
        rpn 使用 fpn 输出的特征和ground truch来输出 proposal \
        rpn 使用 anchor generator 根据 feature map 的大小来生产 anchors
-       ```
+       ```python
        anchors = self.anchor_generator(features)
        ```
        rpn 使用输入特征预测每个 anchor 的类别和偏移
-       ```
+       ```python
        pred_objectness_logits, pred_anchor_deltas = self.rpn_head(features)
        ```
        rpn 使用 anchors 和 ground truth label 进行 IoU 计算，根据 Matcher 中的规则将 anchor 和 ground truth 类别匹配。\
        从而得到 rpn 计算 loss 所需要的类别信息。 
-       ```
+       ```python
         if self.training:
             assert gt_instances is not None, "RPN requires gt_instances in training!"
             gt_labels, gt_boxes = self.label_and_sample_anchors(anchors, gt_instances)
@@ -86,7 +87,7 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
        roi_heads 根据 anchors 原始位置加上 rpn 预测的偏移量，提取 proposals.\
        然后根据 proposal 映射 feature map 的特征区域，然后通过 RoIPooling 将 featuremap 处理成固定大小。\
        通过增强后的特征地候选区域进行类别和框位置预测。
-       ```
+       ```python
         features = [features[f] for f in self.box_in_features]
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
@@ -95,7 +96,7 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
        
 2. build optimizer
    构建优化器
-   ```
+   ```python
    def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimizer:
     """
     Build an optimizer from config.
@@ -114,7 +115,7 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
    ```
 
 3. build dataloader
-   ```
+   ```python
     if isinstance(dataset, list):
         dataset = DatasetFromList(dataset, copy=False)
     if mapper is not None:
@@ -133,13 +134,13 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
    
 4. build scheduler
    构建 learning rate 调节器
-   ```
+   ```pyhton
    self.scheduler = self.build_lr_scheduler(cfg, optimizer)
    ```
 
 5. build checkpointer
    构建中间模型保存器
-   ```
+   ```python
    self.checkpointer = DetectionCheckpointer(
         model, 
         cfg.OUTPUT_DIR,
