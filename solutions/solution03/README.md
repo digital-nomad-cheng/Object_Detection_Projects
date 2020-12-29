@@ -47,7 +47,17 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
             fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
         )
         ```
-     + build rpn: \
+     + build rpn: 
+       rpn architecture according to the paper. In the paper the objectness score is num_anchors*2, \
+       while in detectron2 implementation is numm_anchors
+       ```python
+        # 3x3 conv for the hidden representation
+        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
+        # 1x1 conv for predicting objectness logits
+        self.objectness_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
+        # 1x1 conv for predicting box2box transform deltas
+        self.anchor_deltas = nn.Conv2d(in_channels, num_anchors * box_dim, kernel_size=1, stride=1)
+       ```
        rpn 使用 fpn 输出的特征和ground truch来输出 proposal \
        rpn 使用 anchor generator 根据 feature map 的大小来生产 anchors
        ```
