@@ -64,15 +64,70 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
             )
         ```
      + build roi_heads
-       roi_heads 根据 anchors 原始位置加上 rpn 预测的偏移量，     
-    
+       roi_heads 根据 anchors 原始位置加上 rpn 预测的偏移量，提取 proposals.\
+       然后根据 proposal 映射 feature map 的特征区域，然后通过 RoIPooling 将 featuremap 处理成固定大小。\
+       通过增强后的特征地候选区域进行类别和框位置预测。
+       ```
+        features = [features[f] for f in self.box_in_features]
+        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
+        box_features = self.box_head(box_features)
+        predictions = self.box_predictor(box_features)
+       ```
+       
 2. build optimizer
+   构建优化器
+   ```
+   def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimizer:
+    """
+    Build an optimizer from config.
+    """
+    params = get_default_optimizer_params(
+        model,
+        base_lr=cfg.SOLVER.BASE_LR,
+        weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+        weight_decay_norm=cfg.SOLVER.WEIGHT_DECAY_NORM,
+        bias_lr_factor=cfg.SOLVER.BIAS_LR_FACTOR,
+        weight_decay_bias=cfg.SOLVER.WEIGHT_DECAY_BIAS,
+    )
+    return maybe_add_gradient_clipping(cfg, torch.optim.SGD)(
+        params, cfg.SOLVER.BASE_LR, momentum=cfg.SOLVER.MOMENTUM, nesterov=cfg.SOLVER.NESTEROV
+    )
+   ```
 
 3. build dataloader
-
+   ```
+    if isinstance(dataset, list):
+        dataset = DatasetFromList(dataset, copy=False)
+    if mapper is not None:
+        dataset = MapDataset(dataset, mapper)
+    if sampler is None:
+        sampler = TrainingSampler(len(dataset))
+    assert isinstance(sampler, torch.utils.data.sampler.Sampler)
+    return build_batch_data_loader(
+        dataset,
+        sampler,
+        total_batch_size,
+        aspect_ratio_grouping=aspect_ratio_grouping,
+        num_workers=num_workers,
+    )
+   ```
+   
 4. build scheduler
+   构建 learning rate 调节器
+   ```
+   self.scheduler = self.build_lr_scheduler(cfg, optimizer)
+   ```
 
 5. build checkpointer
+   构建中间模型保存器
+   ```
+   self.checkpointer = DetectionCheckpointer(
+        model, 
+        cfg.OUTPUT_DIR,
+        optimizer=optimizer,
+        scheduler=self.scheduler,
+   )
+   ```
 
 
 
