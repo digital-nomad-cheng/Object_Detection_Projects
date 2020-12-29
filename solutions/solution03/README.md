@@ -1,11 +1,20 @@
 
 Assignment:
 
-Finish a debuging report, write down the problems you encounter during the
+Finish a debugging report, write down the problems you encounter during the
 process and solutions you come up with. You could also write down your new 
 understandings.
 
-Arguments:
+Build from source:
+```
+conda create -n .detectron2
+conda install pytorch torchvision torchaudio cudatoolkit=10.1 -c pytorch
+git clone https://github.com/facebookresearch/detectron2
+python -m pip install -e detectron2
+```
+
+
+Training Arguments:
 ```
 --config-file 
 ./configs/COCO-Detection/faster_rcnn_R_50_FPN_1x.yaml 
