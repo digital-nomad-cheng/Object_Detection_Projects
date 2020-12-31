@@ -29,7 +29,7 @@ DATALOADER.NUM_WORKERS 0
 cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主要在 Trainer 里面, 主要分为5个部分。
 
 1. build model: 整个网络 forward 的核心逻辑在 rcnn.py 里面 
-    + build resnet: resnet 作为 backbone 特征提取器，输出特征对应 
+    + build resnet: resnet 作为 backbone 特征提取器，输出特征 cfg.MODEL.RESNET.OUT_FEATURES。
         ```python
         bottom_up = build_resnet_backbone(cfg, input_shape)
         ```
@@ -48,9 +48,9 @@ cfg 是整个项目的配置文件，控制 Trainer 的构建。训练逻辑主�
         )
         ```
      + build rpn: 
-       rpn architecture according to the paper. \
-       **In the paper the objectness score is num_anchors*2,
-       while in detectron2 implementation is numm_anchors.**
+       rpn 结构，这里和论文不一致。 \
+       **论文中分和课件中 rpn objectness 输出通道数都是 num_anchors\*2, 而 detectron2 中是 num_anchos 。** \
+       这一点应该和使用的 loss 函数差别有关系。
        ```python
         # 3x3 conv for the hidden representation
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
