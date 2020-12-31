@@ -6,6 +6,7 @@
 1. Generate COCO format annotation of wider face.
 2. Register wider face into detectron2.
 
+## Build RetinaFace
 
 
 
