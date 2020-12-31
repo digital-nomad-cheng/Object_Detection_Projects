@@ -1,0 +1,15 @@
+_BASE_: "../Base-RetinaFace.yaml"
+MODEL:
+  BACKBONE:
+    NAME: "build_mnetv1_fpn_wo_top_block_backbone"
+  MNET:
+    OUT_FEATURES: ["mob3", "mob4", "mob5"]
+    WIDTH_MULT: 0.25
+  FPN:
+    IN_FEATURES: ["mob3", "mob4", "mob5"]
+    OUT_CHANNELS: 64
+SOLVER:
+  IMS_PER_BATCH: 32
+  STEPS: (140000, 170000)
+  MAX_ITER: 200000
+OUTPUT_DIR: './work_dirs/retinaface_mnetv1_FPN'

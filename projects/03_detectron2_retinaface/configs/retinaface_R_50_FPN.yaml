@@ -1,0 +1,16 @@
+_BASE_: "../Base-RetinaFace.yaml"
+MODEL:
+  BACKBONE:
+    NAME: "build_resnet_fpn_wo_top_block_backbone"
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  RESNETS:
+    DEPTH: 50
+    OUT_FEATURES: ["res3", "res4", "res5"]
+    NORM: "BN"
+  FPN:
+    IN_FEATURES: ["res3", "res4", "res5"]
+SOLVER:
+  IMS_PER_BATCH: 24
+  STEPS: (200000, 230000)
+  MAX_ITER: 250000
+OUTPUT_DIR: './work_dirs/retinaface_R50_FPN'
