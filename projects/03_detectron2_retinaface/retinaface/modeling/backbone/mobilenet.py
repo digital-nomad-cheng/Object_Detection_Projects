@@ -5,13 +5,13 @@ from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.modeling.backbone.fpn import FPN, LastLevelMaxPool, LastLevelP6P7
 
 __all__ = [
-    "build_mntv1_backbone",
-#    "build_mntv2_backbone"
+    "build_mnv1_backbone",
+#    "build_mnv2_backbone"
 ]
 
 def conv_bn_leaky(inp, oup, stride=1, leaky=0):
     return nn.Sequential(
-        Conv2d(inp, oup, 3, stride, 1, bias=False)
+        Conv2d(inp, oup, 3, stride, 1, bias=False),
         nn.BatchNorm2d(oup),
         nn.LeakyReLU(negative_slope=leaky, inplace=True)
     )
@@ -38,8 +38,8 @@ class MobileNetV1(Backbone):
         name = "stem"
         self.stem = conv_bn_leaky(input_channels, output_channels, 2, leaky=0.1)
         current_stride = 2
-        self._out_feature_strdies = {name: current_stride)
-        self._out_feature_channels = {name: output_channels)
+        self._out_feature_strdies = {name: current_stride}
+        self._out_feature_channels = {name: output_channels}
 
         dw_settings = [
             # c, n, s
@@ -68,7 +68,7 @@ class MobileNetV1(Backbone):
                         self.return_features_indices.index(len(self.features)) + 2
                     )
                     self._out_feature_channels.update({
-                        name: output_channel
+                        name: output_channels
                     })
                     current_stride *= 2
                     self._out_feature_strides.update({
@@ -82,7 +82,7 @@ class MobileNetV1(Backbone):
         self._initialize_weights()
 
     def _initialize_weights(self):
-       for m in self.modules()
+       for m in self.modules():
            if isinstance(m, Conv2d):
                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                m.weight.data.normal_(0, (2. / n) ** 0.5)
@@ -97,18 +97,18 @@ class MobileNetV1(Backbone):
 
     def freeze(self, freeze_at):
         if freeze_at > 0:
-        for p in self.stem.parameters():
-            p.requires_grad = False
+            for p in self.stem.parameters():
+                p.requires_grad = False
 
-        if freeze_at > 1:
-            # freeze features
-            freeze_at = freeze_at - 2
-            freeze_layers = self.return_features_indices[freeze_at] \
-                if freeze_at < len(self.return_features_indices) \
-                else self.return_features_indices[-1]
-            for layer_index in range(freeze_layers):
-                for p in self.features[layer_index].parameters():
-                    p.requires_grad = False
+            if freeze_at > 1:
+                # freeze features
+                freeze_at = freeze_at - 2
+                freeze_layers = self.return_features_indices[freeze_at] \
+                    if freeze_at < len(self.return_features_indices) \
+                    else self.return_features_indices[-1]
+                for layer_index in range(freeze_layers):
+                    for p in self.features[layer_index].parameters():
+                        p.requires_grad = False
         
     def forward(self, x):
         outputs = {}
@@ -127,11 +127,11 @@ class MobileNetV1(Backbone):
         return outputs
 
 @BACKBONE_REGISTRY.register()
-def build_mntv1_backbone(cfg, input_shape: ShapeSpec):
+def build_mnv1_backbone(cfg, input_shape: ShapeSpec):
    freeze_at = cfg.MODEL.BACKBONE.FREEZE_AT
    out_features = cfg.MODEL.MNET.OUT_FEATURES
    width_mult = cfg.MODEL.MNET.WIDTH_MULT
-   model = MobileNetV1(cfg, input_shape.channels, width_mutl, out_features)
+   model = MobileNetV1(cfg, input_shape.channels, width_mult, out_features)
    model.freeze(freeze_at)
         
 
