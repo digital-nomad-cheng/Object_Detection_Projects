@@ -7,4 +7,4 @@ class DatasetMapper(BaseDatasetMapper):
     def __init__(self, cfg, is_train=True):
         super().__init__(cfg, is_train)
 
-        self.tfm_gens = dettection_utils.build_transform_gen(cfg, is_train)
+        self.tfm_gens = detection_utils.build_transform_gen(cfg, is_train)

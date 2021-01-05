@@ -438,37 +438,35 @@ class RetinaFace(nn.Module):
     def get_ground_truth(self, anchors, targets):
         """
         Args:
-            anchors (list[Boxes]): A list of #feature level Boxes.
-                The Boxes contains anchors of this image on the specific feature level.
-            targets (list[Instances]): a list of N `Instances`s. The i-th
+            anchors (list[Boxes]): A list of #feature level Boxes.The Boxes 
+                contains anchors of this image on the specific feature level.
+            targets (list[Instances]): a list of N `Instances`s. The i-th 
                 `Instances` contains the ground-truth per-instance annotations
                 for the i-th input image.  Specify `targets` during training only.
 
         Returns:
             gt_classes (Tensor):
-                An integer tensor of shape (N, R) storing ground-truth
-                labels for each anchor.
-                R is the total number of anchors, i.e. the sum of Hi x Wi x A for all levels.
-                Anchors with an IoU with some target higher than the foreground threshold
-                are assigned their corresponding label in the [0, K-1] range.
-                Anchors whose IoU are below the background threshold are assigned
-                the label "K". Anchors whose IoU are between the foreground and background
+                An integer tensor of shape (N, R) storing ground-truth labels 
+                for each anchor. R is the total number of anchors, i.e. 
+                the sum of Hi x Wi x A for all levels. Anchors with an IoU with 
+                some target higher than the foreground threshold are assigned 
+                their corresponding label in the [0, K-1] range. Anchors whose 
+                IoU are below the background threshold are assigned the label "K".
+                Anchors whose IoU are between the foreground and background
                 thresholds are assigned a label "-1", i.e. ignore.
             gt_anchors_deltas (Tensor):
-                Shape (N, R, 4).
-                The last dimension represents ground-truth box2box transform
-                targets (dx, dy, dw, dh) that map each anchor to its matched ground-truth box.
-                The values in the tensor are meaningful only when the corresponding
-                anchor is labeled as foreground.
+                Shape (N, R, 4). The last dimension represents ground-truth 
+                box2box transform targets (dx, dy, dw, dh) that map each anchor 
+                to its matched ground-truth box. The values in the tensor are 
+                meaningful only when the corresponding anchor is labeled as foreground.
             gt_landmarks_deltas (Tensor):
-                Shape (N, R, 10).
-                The last dimension represents ground-truth landmark2landmark transform
-                targets (dx1, dy1, dx2, ..., dx5, dy5) that map each anchor to its matched ground-truth landmark.
-                The values in the tensor are meaningful only when the corresponding
+                Shape (N, R, 10). The last dimension represents ground-truth 
+                landmark2landmark transform targets (dx1, dy1, dx2, ..., dx5, dy5)
+                that map each anchor to its matched ground-truth landmark. The 
+                values in the tensor are meaningful only when the corresponding
                 anchor is labeled as foreground and values >= 0.
             gt_landmarks_labels (Tensor):
-                Shape (N, R)
-                "0" means invalid, "1" means foreground.
+                Shape (N, R) "0" means invalid, "1" means foreground.
         """
         gt_classes = []
         gt_anchors_deltas = []
@@ -519,13 +517,14 @@ class RetinaFace(nn.Module):
             gt_landmarks_deltas.append(gt_landmarks_reg_deltas_i)
             gt_landmarks_labels.append(gt_landmarks_labels_i)
 
-        return torch.stack(gt_classes), torch.stack(gt_anchors_deltas), torch.stack(gt_landmarks_deltas), torch.stack(
-            gt_landmarks_labels)
+        return torch.stack(gt_classes), torch.stack(gt_anchors_deltas), 
+        torch.stack(gt_landmarks_deltas), torch.stack(gt_landmarks_labels)
 
     def inference(self, box_cls, box_delta, landmark_delta, anchors, image_sizes):
         """
         Arguments:
-            box_cls, box_delta, landmark_delta: Same as the output of :meth:`RetinaNetHead.forward`
+            box_cls, box_delta, landmark_delta: Same as the output of 
+                :meth:`RetinaNetHead.forward`
             anchors (list[Boxes]): A list of #feature level Boxes.
                 The Boxes contain anchors of this image on the specific feature level.
             image_sizes (List[torch.Size]): the input image sizes
@@ -553,8 +552,8 @@ class RetinaFace(nn.Module):
 
     def inference_single_image(self, box_cls, box_delta, landmark_delta, anchors, image_size):
         """
-        Single-image inference. Return bounding-box and landmark detection results by thresholding
-        on scores and applying non-maximum suppression (NMS).
+        Single-image inference. Return bounding-box and landmark detection results
+        by thresholding on scores and applying non-maximum suppression (NMS).
 
         Arguments:
             box_cls (list[Tensor]): list of #feature levels. Each entry contains
@@ -633,14 +632,3 @@ class RetinaFace(nn.Module):
             images, self.backbone.size_divisibility)
         return images
 
-
-
-
-
-            
-
-            
-
-
-
-    

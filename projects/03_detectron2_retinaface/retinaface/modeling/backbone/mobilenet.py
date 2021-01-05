@@ -82,11 +82,11 @@ class MobileNetV1(Backbone):
         self._initialize_weights()
 
     def _initialize_weights(self):
-       for m in self.modules():
-           if isinstance(m, Conv2d):
-               n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-               m.weight.data.normal_(0, (2. / n) ** 0.5)
-               if m.bias is not None:
+        for m in self.modules():
+            if isinstance(m, Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, (2. / n) ** 0.5)
+                if m.bias is not None:
                    m.bias.data.zero_()
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
@@ -119,7 +119,7 @@ class MobileNetV1(Backbone):
             x = m(x)
             for i in self.return_features_indices:
                 name = "mob{}".format(self.return_features_indices.index(i) + 2)
-                if name  in self._out_features:
+                if name in self._out_features:
                     outputs[name] = x
     
         print(outputs)
@@ -128,10 +128,12 @@ class MobileNetV1(Backbone):
 
 @BACKBONE_REGISTRY.register()
 def build_mnv1_backbone(cfg, input_shape: ShapeSpec):
-   freeze_at = cfg.MODEL.BACKBONE.FREEZE_AT
-   out_features = cfg.MODEL.MNET.OUT_FEATURES
-   width_mult = cfg.MODEL.MNET.WIDTH_MULT
-   model = MobileNetV1(cfg, input_shape.channels, width_mult, out_features)
-   model.freeze(freeze_at)
+    freeze_at = cfg.MODEL.BACKBONE.FREEZE_AT
+    out_features = cfg.MODEL.MNET.OUT_FEATURES
+    width_mult = cfg.MODEL.MNET.WIDTH_MULT
+    model = MobileNetV1(cfg, input_shape.channels, width_mult, out_features)
+    model.freeze(freeze_at)
+    
+    return model
         
 

@@ -1,4 +1,4 @@
-_BASE_: "../Base-RetinaFace.yaml"
+_BASE_: "./Base-RetinaFace.yaml"
 MODEL:
   BACKBONE:
     NAME: "build_mnv1_fpn_wo_top_block_backbone"
