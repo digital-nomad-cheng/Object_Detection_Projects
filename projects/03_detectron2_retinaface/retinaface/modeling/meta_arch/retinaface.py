@@ -56,7 +56,7 @@ class ssh_block(nn.Module):
         leaky = 0
         if (oup <= 64):
             leaky = 0.1
-        
+
         self.conv3x3 = nn.Sequential(
             nn.Conv2d(inp, oup//2, 3, 1, 1, bias=False),
             nn.BatchNorm2d(oup//2)
@@ -70,20 +70,20 @@ class ssh_block(nn.Module):
             nn.Conv2d(oup//4, oup//4, 3, 1, 1, bias=False),
             nn.BatchNorm2d(oup//4)
         )
-        
+
         self.conv7x7 = nn.Sequential(
             nn.Conv2d(inp, oup//4, 3, 1, 1, bias=False),
             nn.BatchNorm2d(oup//4),
             nn.LeakyReLU(negative_slope=leaky),
-            
+
             nn.Conv2d(inp, oup//4, 3, 1, 1, bias=False),
             nn.BatchNorm2d(oup//4),
             nn.LeakyReLU(negative_slope=leaky),
-            
+
             nn.Conv2d(oup//4, oup//4, 3, 1, 1, bias=False),
             nn.BatchNorm2d(oup//4)
         )
-        
+
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
@@ -96,15 +96,16 @@ class ssh_block(nn.Module):
 
         return out
 
+
 class SSH(nn.Module):
     def __init__(self, cfg, input_shape: List[ShapeSpec]):
         super().__init__()
         # Add ssh block
         for i, inp_shape in enumerate(input_shape):
             setattr(
-                self, 
-                "block{}".format(i), 
-                ssh_block(inp_shape.cahnels, inp_shape.channels)
+                self,
+                "block{}".format(i),
+                ssh_block(inp_shape.channels, inp_shape.channels)
             )
 
         # weight init
@@ -118,8 +119,9 @@ class SSH(nn.Module):
         outputs = []
         for i, feature in enumerate(features):
             outputs.append(getattr(self, "block{}".format(i))(features))
-        
+
         return outputs
+
 
 class RetinaFaceHead(nn.Module):
     """
@@ -132,12 +134,12 @@ class RetinaFaceHead(nn.Module):
         num_classes = cfg.MODEL.RETINAFACE.NUM_CLASSES
         prior_prob = cfg.MODEL.RETINAFACE.PRIOR_PROB
         num_anchors = build_anchor_generator(cfg, input_shape).num_cell_anchors
-        
+
         assert (
             len(set(num_anchors)) == 1
         ), "Using different number of anchors between levels is not currently supported!"
         num_anchors = num_anchors[0]
-        
+
         self.ssh = SSH(cfg, input_shape)
 
         # Add heads
@@ -156,7 +158,7 @@ class RetinaFaceHead(nn.Module):
             )
 
         self.cls_score = nn.ModuleList(cls_score)
-        self.bbox_pred = nn.MoudleList(bbox_pred)
+        self.bbox_pred = nn.ModuleList(bbox_pred)
         self.landmark_pred = nn.ModuleList(landmark_pred)
 
         # Use prior in model initialization to improve stability
@@ -187,8 +189,9 @@ class RetinaFaceHead(nn.Module):
             logits.append(self.cls_score[i](feature))
             bbox_reg.append(self.bbox_pred[i](feature))
             landmark_reg.append(self.landmark_pred[i](feature))
-        
+
         return logits, bbox_reg, landmark_reg
+
 
 @META_ARCH_REGISTRY.register()
 class RetinaFace(nn.Module):
@@ -198,7 +201,7 @@ class RetinaFace(nn.Module):
 
     def __init__(self, cfg):
         super().__init__()
-        
+
         self.num_classes = cfg.MODEL.RETINAFACE.NUM_CLASSES
         self.in_features = cfg.MODEL.RETINAFACE.IN_FEATURES
         # loss parameters
@@ -217,7 +220,7 @@ class RetinaFace(nn.Module):
 
         self.backbone = build_backbone(cfg)
         backbone_shape = self.backbone.output_shape()
-        feature_shapes = [backbone_shape[f] for f in self.features]
+        feature_shapes = [backbone_shape[f] for f in self.in_features]
         self.head = RetinaFaceHead(cfg, feature_shapes)
         self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
 
@@ -239,25 +242,25 @@ class RetinaFace(nn.Module):
         self.register_buffer(
             "pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1)
         )
-        
+
         """
         In Detectron1, loss is normalized by number of foreground samples in the 
         batch. When batch size is 1 per GPU, #foreground has a large variance and
-        using it lead to lower performace. Here we mantian an EMA of #foreground
+        using it lead to lower performance. Here we maintain an EMA of #foreground
         to stabilize the normalizer.
         """
         # initialize with any reasonable #fg that's not too small
-        self.loss_normalizer = 100 
+        self.loss_normalizer = 100
         self.loss_normalizer_momentum = 0.9
-        
+
     @property
     def device(self):
         return self.pixel_mean.device
 
-    def visualize_trainning(self, batched_inputs, results):
+    def visualize_training(self, batched_inputs, results):
         """
-        A utility function used to visualize ground truch images and final network
-        predictions. It show ground truch boudning boxes on the original image and 
+        A utility function used to visualize ground truth images and final network
+        predictions. It show ground truth bounding boxes on the original image and
         up to 20 predicted object bounding boxes on the original image.
         Args:
             batched_inputs (list): a list that contains input to the model.
@@ -268,7 +271,7 @@ class RetinaFace(nn.Module):
             "Cannot visualize inputs and results of different sizes"
         storage = get_event_storage()
         max_boxes = 20
-        
+
         image_index = 0
         img = batched_inputs[image_index]["image"].cpu().numpy()
         assert img.shape[0] == 3, "Images should have 3 channels."
@@ -298,7 +301,7 @@ class RetinaFace(nn.Module):
         Args:
             batched_inputs: a list, batched outputs of :class: `DatasetMapper`.
                 Each item in the list contains the inputs for one image.
-                For now, each item in the list is a dict that containns:
+                For now, each item in the list is a dict that contains:
 
                 * images: Tensor, image in (C, H, W) format.
                 * instances: Instances
@@ -309,7 +312,7 @@ class RetinaFace(nn.Module):
         Retuns:
             dict[str: Tensor]:
                 mapping from a named loss to a tensor storing the loss. Used 
-                durring training only.
+                during training only.
         """
 
         images = self.preprocess_image(batched_inputs)
@@ -317,7 +320,7 @@ class RetinaFace(nn.Module):
             gt_instances = [x['instances'].to(self.device) for x in batched_inputs]
         elif 'targets' in batched_inputs[0]:
             log_first_n(
-                logging.WARN, "'targets' in the model inputs is remnamed to \
+                logging.WARN, "'targets' in the model inputs is renamed to \
                     'instances'!", n=1
             )
             gt_instances = [x['targets'].to(self.device) for x in batched_inputs]
@@ -331,9 +334,9 @@ class RetinaFace(nn.Module):
 
         if self.training:
             gt_classes, gt_anchors_reg_deltas, gt_landmarks_reg_deltas, gt_landmarks_labels = \
-            self.get_ground_truth(anchors, gt_instances)
+                self.get_ground_truth(anchors, gt_instances)
             losses = self.losses(
-                gt_classes, gt_anchors_reg_deltas, gt_landmarks_reg_deltas, 
+                gt_classes, gt_anchors_reg_deltas, gt_landmarks_reg_deltas,
                 gt_landmarks_labels, box_cls, box_delta, landmark_delta
             )
 
@@ -343,7 +346,7 @@ class RetinaFace(nn.Module):
                     results = self.inference(
                         box_cls, box_delta, landmark_delta, anchors, images.image_sizes
                     )
-            
+
                     self.visualize_training(batched_inputs, results)
 
                 return losses
@@ -361,7 +364,7 @@ class RetinaFace(nn.Module):
                 processed_results.append({"instances": r})
             return processed_results
 
-    def losses(self, 
+    def losses(self,
         gt_classes, gt_anchors_deltas, gt_landmarks_deltas, gt_landmarks_labels,
         pred_class_logits, pred_anchor_deltas, pred_landmark_deltas
     ):
@@ -382,9 +385,9 @@ class RetinaFace(nn.Module):
         """
 
         pred_class_logits, pred_anchor_deltas, pred_landmark_deltas = \
-        permute_all_cls_box_landmark_to_N_HWA_K_and_contat(
+            permute_all_cls_box_landmark_to_N_HWA_K_and_contat(
             pred_class_logits, pred_anchor_deltas, pred_landmark_deltas, self.num_classes
-        ) 
+        )
         gt_classes = gt_classes.flatten()
         gt_anchors_deltas = gt_anchors_deltas.view(-1, 4)
         gt_landmarks_deltas = gt_landmarks_deltas.view(-1, 10)
@@ -395,7 +398,7 @@ class RetinaFace(nn.Module):
         num_foreground = foreground_idxs.sum().item()
         get_event_storage().put_scalar("num_foreground", num_foreground)
         self.loss_normalizer = (
-            self.loss_normalizer_momentum * self.loss_normalizer + 
+            self.loss_normalizer_momentum * self.loss_normalizer +
             (1 - self.loss_normalizer_momentum) * num_foreground
         )
 
@@ -410,7 +413,7 @@ class RetinaFace(nn.Module):
             gamma=self.focal_loss_gamma,
             redution="sum",
         ) / max(1, self.loss_normalizer)
-        
+
         # regression loss
         loss_box_reg = smooth_l1_loss(
             pred_anchor_deltas[foreground_idxs],
@@ -431,7 +434,7 @@ class RetinaFace(nn.Module):
             reduction="sum"
         ) / max(1, self.loss_normalizer)
 
-        return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg, 
+        return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg,
                 "loss_landmark_reg": loss_landmark_reg}
 
     @torch.no_grad()
@@ -517,8 +520,8 @@ class RetinaFace(nn.Module):
             gt_landmarks_deltas.append(gt_landmarks_reg_deltas_i)
             gt_landmarks_labels.append(gt_landmarks_labels_i)
 
-        return torch.stack(gt_classes), torch.stack(gt_anchors_deltas), 
-        torch.stack(gt_landmarks_deltas), torch.stack(gt_landmarks_labels)
+        return torch.stack(gt_classes), torch.stack(gt_anchors_deltas), \
+               torch.stack(gt_landmarks_deltas), torch.stack(gt_landmarks_labels)
 
     def inference(self, box_cls, box_delta, landmark_delta, anchors, image_sizes):
         """

@@ -20,11 +20,11 @@ def conv_dw_leaky(inp, oup, stride, leaky=0.1):
     return nn.Sequential(
         Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
         nn.BatchNorm2d(inp),
-        nn.LeakyReLU(nagative_slope=leaky, inplace=True),
+        nn.LeakyReLU(negative_slope=leaky, inplace=True),
 
         Conv2d(inp, oup, 1, 1, 0, bias=False),
         nn.BatchNorm2d(oup),
-        nn.LeakyReLU(negative_slope=leaky, inplalce=True),
+        nn.LeakyReLU(negative_slope=leaky, inplace=True),
     )
 
 class MobileNetV1(Backbone):
@@ -38,7 +38,7 @@ class MobileNetV1(Backbone):
         name = "stem"
         self.stem = conv_bn_leaky(input_channels, output_channels, 2, leaky=0.1)
         current_stride = 2
-        self._out_feature_strdies = {name: current_stride}
+        self._out_feature_strides = {name: current_stride}
         self._out_feature_channels = {name: output_channels}
 
         dw_settings = [
@@ -58,7 +58,7 @@ class MobileNetV1(Backbone):
             output_channels = int(c * width_mult)
             for i in range(n):
                 if i == 0:
-                    self.features.appand(conv_dw_leaky(input_channels, output_channels, s))
+                    self.features.append(conv_dw_leaky(input_channels, output_channels, s))
                 else:
                     self.features.append(conv_dw_leaky(input_channels, output_channels, 1))
                 input_channels = output_channels
@@ -133,7 +133,7 @@ def build_mnv1_backbone(cfg, input_shape: ShapeSpec):
     width_mult = cfg.MODEL.MNET.WIDTH_MULT
     model = MobileNetV1(cfg, input_shape.channels, width_mult, out_features)
     model.freeze(freeze_at)
-    
+
     return model
         
 

@@ -3,13 +3,11 @@ from detectron2.modeling.backbone.fpn import FPN
 from detectron2.layers import ShapeSpec
 from .mobilenet import build_mnv1_backbone
 
-__all__ = [
-    'build_mnv1_fpn_wo_top_block_backone'
-]
+__all__ = ['build_mnv1_fpn_wo_top_block_backbone']
 
 
 @BACKBONE_REGISTRY.register()
-def build_mnv1_fpn_wo_top_block_backone(cfg, input_shape: ShapeSpec):
+def build_mnv1_fpn_wo_top_block_backbone(cfg, input_shape: ShapeSpec):
     bottom_up = build_mnv1_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS

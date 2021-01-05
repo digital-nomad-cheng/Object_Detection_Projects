@@ -22,8 +22,9 @@ class Landmark2LandmarkTransform(object):
         Args:
             weights (10-element tuple): scaling factors applied to deltas.
         """
+        self.weights = weights
 
-    def get_deltas(self, scr_boxes, target_landmark):
+    def get_deltas(self, src_boxes, target_landmarks):
         """
         Get landmark regress transformation deltas that can be used to transform
         the `src_boxes` into the `target_landmarks`. That is the relation: 
@@ -45,17 +46,15 @@ class Landmark2LandmarkTransform(object):
 
         src_xy = torch.stack((src_ctr_x, src_ctr_y), dim=1)
         src_xy = src_xy.repeat([1, 5])
-        src_wh = torch.stack(src_widths, src_heights), dim=1)
+        src_wh = torch.stack((src_widths, src_heights), dim=1)
         src_wh = src_wh.repeat([1, 5])
         weights = torch.as_tensor(self.weights).to(src_wh.dtype).to(src_wh.device)
         deltas = weights * (target_landmarks - src_xy) / src_wh
 
-        assert (src_widths > 0).all().item(
+        assert (src_widths > 0).all().item(), \
             "Input boxes to Box2BoxTransform are not valid!"
-        )
 
         return deltas
-
 
     def apply_deltas(self, deltas, boxes):
         """

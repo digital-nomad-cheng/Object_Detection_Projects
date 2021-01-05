@@ -21,8 +21,9 @@ widerface_metadata = {
     "keypoint_flip_map": WIDERFACE_KEYPOINT_FLIP_MAP,
 }
 
-# root = os.getenv("DETECTRON2_DATASETS", "datasets")
-root = "/home/idealabs/data/opensource_dataset/WIDER/"
+root = os.getenv("DETECTRON2_DATASETS", "datasets")
+print("Detectron2 dataset path:", root)
+# root = "/home/idealabs/data/opensource_dataset/WIDER/"
 widerface_train_image_root = osp.join(root, "train/images")
 widerface_train_annotation_file = osp.join(root, "train/widerface_coco.json")
 register_coco_instances("widerface_train", widerface_metadata, widerface_train_annotation_file, widerface_train_image_root)
