@@ -3,6 +3,7 @@ import os.path as osp
 import copy
 
 from detectron2.data.datasets import register_coco_instances
+from detectron2.data import MetadataCatalog
 
 """
 Register wider face dataset
@@ -24,6 +25,11 @@ widerface_metadata = {
 root = os.getenv("DETECTRON2_DATASETS", "datasets")
 print("Detectron2 dataset path:", root)
 # root = "/home/idealabs/data/opensource_dataset/WIDER/"
-widerface_train_image_root = osp.join(root, "train/images")
-widerface_train_annotation_file = osp.join(root, "train/widerface_coco.json")
-register_coco_instances("widerface_train", widerface_metadata, widerface_train_annotation_file, widerface_train_image_root)
+widerface_train_image_root = osp.join(root, "widerface/train/images")
+widerface_train_annotation_file = osp.join(root, "widerface/train/widerface_coco.json")
+register_coco_instances("widerface_train", widerface_metadata, 
+    widerface_train_annotation_file, widerface_train_image_root
+)
+
+metadata = MetadataCatalog.get("widerface_train")
+print(metadata)

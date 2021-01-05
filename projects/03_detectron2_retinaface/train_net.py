@@ -35,7 +35,7 @@ from detectron2.evaluation import (
     verify_results,
 )
 from detectron2.modeling import GeneralizedRCNNWithTTA
-# from retinaface.data.widerface
+import retinaface.data.register_widerface
 from retinaface.modeling.backbone import *
 from retinaface.modeling.meta_arch import *
 from retinaface.data.dataset_mapper import DatasetMapper

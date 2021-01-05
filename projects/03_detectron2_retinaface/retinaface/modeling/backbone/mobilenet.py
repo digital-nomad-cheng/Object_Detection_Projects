@@ -33,7 +33,6 @@ class MobileNetV1(Backbone):
 
         base_channels = 32
         output_channels = int(base_channels * width_mult)
-        
 
         name = "stem"
         self.stem = conv_bn_leaky(input_channels, output_channels, 2, leaky=0.1)
@@ -113,7 +112,7 @@ class MobileNetV1(Backbone):
     def forward(self, x):
         outputs = {}
         x = self.stem(x)
-        if "stem" in self.out_features:
+        if "stem" in self._out_features:
             outputs["stem"] = x
         for i, m in enumerate(self.features, 1):
             x = m(x)
