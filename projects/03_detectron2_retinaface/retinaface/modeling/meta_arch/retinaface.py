@@ -76,7 +76,7 @@ class ssh_block(nn.Module):
             nn.BatchNorm2d(oup//4),
             nn.LeakyReLU(negative_slope=leaky),
 
-            nn.Conv2d(inp, oup//4, 3, 1, 1, bias=False),
+            nn.Conv2d(oup//4, oup//4, 3, 1, 1, bias=False),
             nn.BatchNorm2d(oup//4),
             nn.LeakyReLU(negative_slope=leaky),
 
@@ -118,7 +118,7 @@ class SSH(nn.Module):
     def forward(self, features):
         outputs = []
         for i, feature in enumerate(features):
-            outputs.append(getattr(self, "block{}".format(i))(features))
+            outputs.append(getattr(self, "block{}".format(i))(feature))
 
         return outputs
 
@@ -349,7 +349,7 @@ class RetinaFace(nn.Module):
 
                     self.visualize_training(batched_inputs, results)
 
-                return losses
+            return losses
         else:
             results = self.inference(
                 box_cls, box_delta, landmark_delta, anchors, images.image_sizes
@@ -411,7 +411,7 @@ class RetinaFace(nn.Module):
             gt_classes_target[valid_idxs],
             alpha=self.focal_loss_alpha,
             gamma=self.focal_loss_gamma,
-            redution="sum",
+            reduction="sum",
         ) / max(1, self.loss_normalizer)
 
         # regression loss

@@ -38,7 +38,9 @@ from detectron2.modeling import GeneralizedRCNNWithTTA
 import retinaface.data.register_widerface
 from retinaface.modeling.backbone import *
 from retinaface.modeling.meta_arch import *
-from retinaface.data.dataset_mapper import DatasetMapper
+# from retinaface.data.dataset_mapper import DatasetMapper
+from detectron2.data import DatasetMapper
+import detectron2.data.transforms as T
 
 
 class Trainer(DefaultTrainer):
@@ -56,7 +58,9 @@ class Trainer(DefaultTrainer):
     @classmethod
     def build_train_loader(cls, cfg):
         return build_detection_train_loader(cfg, mapper=DatasetMapper(cfg, True))
-
+        # return build_detection_train_loader(cfg, mapper=DatasetMapper(cfg, is_train=True, augmentations=[
+        #    T.Resize((800, 800))
+        # ]))
 
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):

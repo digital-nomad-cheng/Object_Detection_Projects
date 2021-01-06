@@ -32,5 +32,4 @@ def build_transform_gen(cfg, is_train):
         tfm_gens.append(T.RandomSaturation(0.5, 1.5))
         tfm_gens.append(T.RandomFlip())
         logger.info("TransformGens used in training[Updated]: " + str(tfm_gens))
-    
     return tfm_gens

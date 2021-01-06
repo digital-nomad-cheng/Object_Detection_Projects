@@ -9,12 +9,14 @@ __all__ = [
 #    "build_mnv2_backbone"
 ]
 
+
 def conv_bn_leaky(inp, oup, stride=1, leaky=0):
     return nn.Sequential(
         Conv2d(inp, oup, 3, stride, 1, bias=False),
         nn.BatchNorm2d(oup),
         nn.LeakyReLU(negative_slope=leaky, inplace=True)
     )
+
 
 def conv_dw_leaky(inp, oup, stride, leaky=0.1):
     return nn.Sequential(
@@ -26,6 +28,7 @@ def conv_dw_leaky(inp, oup, stride, leaky=0.1):
         nn.BatchNorm2d(oup),
         nn.LeakyReLU(negative_slope=leaky, inplace=True),
     )
+
 
 class MobileNetV1(Backbone):
     def __init__(self, cfg, input_channels, width_mult=1.0, out_features=None):
@@ -116,14 +119,13 @@ class MobileNetV1(Backbone):
             outputs["stem"] = x
         for i, m in enumerate(self.features, 1):
             x = m(x)
-            for i in self.return_features_indices:
+            if i in self.return_features_indices:
                 name = "mob{}".format(self.return_features_indices.index(i) + 2)
                 if name in self._out_features:
                     outputs[name] = x
-    
-        print(outputs)
         
         return outputs
+
 
 @BACKBONE_REGISTRY.register()
 def build_mnv1_backbone(cfg, input_shape: ShapeSpec):
