@@ -1,7 +1,50 @@
 # setup config
 
-detectron2 中 类通过 @configurable \__init__和 @classmethod from_config 方法实现直接从 config 提取对应的类初始化参数。
+detectron2 中 类通过 @configurable __init__和 @classmethod from_config 方法实现直接从 config 提取对应的类初始化参数。
+```python
+ def __init__(
+        self,
+        *,
+        input_shape: List[ShapeSpec],
+        num_classes,
+        num_anchors,
+        conv_dims: List[int],
+        norm="",
+        prior_prob=0.01,
+    ):
+        """
+        NOTE: this interface is experimental.
 
+        Args:
+            input_shape (List[ShapeSpec]): input shape
+            num_classes (int): number of classes. Used to label background proposals.
+            num_anchors (int): number of generated anchors
+            conv_dims (List[int]): dimensions for each convolution layer
+            norm (str or callable):
+                    Normalization for conv layers except for the two output layers.
+                    See :func:`detectron2.layers.get_norm` for supported types.
+            prior_prob (float): Prior weight for computing bias
+        """
+        super().__init__()
+
+
+@classmethod
+def from_config(cls, cfg, input_shape: List[ShapeSpec]):
+    num_anchors = build_anchor_generator(cfg, input_shape).num_cell_anchors
+    assert (
+        len(set(num_anchors)) == 1
+    ), "Using different number of anchors between levels is not currently supported!"
+    num_anchors = num_anchors[0]
+
+    return {
+        "input_shape": input_shape,
+        "num_classes": cfg.MODEL.RETINANET.NUM_CLASSES,
+        "conv_dims": [input_shape[0].channels] * cfg.MODEL.RETINANET.NUM_CONVS,
+        "prior_prob": cfg.MODEL.RETINANET.PRIOR_PROB,
+        "norm": cfg.MODEL.RETINANET.NORM,
+        "num_anchors": num_anchors,
+    }
+```
 1. anchor generator sizes
     ```yaml
     ANCHOR_GENERATOR:
@@ -9,11 +52,28 @@ detectron2 中 类通过 @configurable \__init__和 @classmethod from_config 方
     ```
 
 2. _C.MODEL.RETINANET.NUM_CONVS = 4: 控制 RetinaHead 中卷积层的个数
+    ```python
+    for in_channels, out_channels in zip([input_shape[0].channels] + conv_dims, conv_dims):
+        cls_subnet.append(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        )
+        if norm:
+            cls_subnet.append(get_norm(norm, out_channels))
+        cls_subnet.append(nn.ReLU())
+        bbox_subnet.append(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        )
+        if norm:
+            bbox_subnet.append(get_norm(norm, out_channels))
+        bbox_subnet.append(nn.ReLU())
+    ```
 
 3. _C.MODEL.RETINANET.PRIOR_PROB = 0.01: 解决初始训练正负样本数目不均衡导致的梯度爆炸问题，让训练更加稳定。
-
-
-
+    ```python
+    # Use prior in model initialization to improve stability
+    bias_value = -(math.log((1 - prior_prob) / prior_prob))
+    torch.nn.init.constant_(self.cls_score.bias, bias_value)
+    ```
 # setup training
 
 构建模型，优化器，数据加载
@@ -47,7 +107,7 @@ data_loader = self.build_train_loader(cfg)
    ```python
    class LastLevelP6P7(nn.Module):
     """
- This module is used in RetinaNet to generate extra layers, P6 and P7 from
+    This module is used in RetinaNet to generate extra layers, P6 and P7 from
     C5 feature.
     """
    
@@ -66,10 +126,16 @@ data_loader = self.build_train_loader(cfg)
         return [p6, p7]
    ```
    
-2. retinanet head
-
+2. retinanet head 
    retinanet head 在增强的特征基础上进行 anchor 的分类和回归
-
+   ```python
+    logits = []
+        bbox_reg = []
+        for feature in features:
+            logits.append(self.cls_score(self.cls_subnet(feature)))
+            bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+        return logits, bbox_reg
+   ```
    
 
 ## build optimizer
