@@ -1,15 +1,23 @@
 # setup config
+
+detectron2 中 类通过 @configurable \__init__和 @classmethod from_config 方法实现直接从 config 提取对应的类初始化参数。
+
 1. anchor generator sizes
     ```yaml
     ANCHOR_GENERATOR:
         SIZES: !!python/object/apply:eval ["[[x, x * 2**(1.0/3), x * 2**(2.0/3) ] for x in [32, 64, 128, 256, 512 ]]"]
     ```
 
-2. _C.MODEL.RETINANET.NUM_CONVS = 4
+2. _C.MODEL.RETINANET.NUM_CONVS = 4: 控制 RetinaHead 中卷积层的个数
 
-3. _C.MODEL.RETINANET.PRIOR_PROB = 0.01: for stable training
+3. _C.MODEL.RETINANET.PRIOR_PROB = 0.01: 解决初始训练正负样本数目不均衡导致的梯度爆炸问题，让训练更加稳定。
+
+
 
 # setup training
+
+构建模型，优化器，数据加载
+
 ```python
 model = self.build_model(cfg)
 optimizer = self.build_optimizer(cfg, model)
@@ -17,7 +25,10 @@ data_loader = self.build_train_loader(cfg)
 ```
 ## build model
 
-1. build retinaface  
+1. build retinanet backbone
+   
+   使用 resnet 提取基础特征，然后使用 FPN 对特征进行增强，并在 res3, res4, res5 基础上增加两个 stride 2 卷积，进一步对 feature map 进行下采样
+   
    ```python
     bottom_up = build_resnet_backbone(cfg, input_shape)
     in_features = cfg.MODEL.FPN.IN_FEATURES
@@ -32,34 +43,39 @@ data_loader = self.build_train_loader(cfg)
         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     )
    ```
-   LastLevelP6P7: use two stride two convolutions to further downsample the feature map.
+   LastLevelP6P7: 对特征进一步下采样
    ```python
    class LastLevelP6P7(nn.Module):
     """
-    This module is used in RetinaNet to generate extra layers, P6 and P7 from
+ This module is used in RetinaNet to generate extra layers, P6 and P7 from
     C5 feature.
     """
-
+   
     def __init__(self, in_channels, out_channels, in_feature="res5"):
         super().__init__()
         self.num_levels = 2
         self.in_feature = in_feature
         self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
-        self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
+     self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
         for module in [self.p6, self.p7]:
             weight_init.c2_xavier_fill(module)
-
+   
     def forward(self, c5):
         p6 = self.p6(c5)
         p7 = self.p7(F.relu(p6))
         return [p6, p7]
    ```
    
-2. build resnet
+2. retinanet head
 
-3. build backbone
+   retinanet head 在增强的特征基础上进行 anchor 的分类和回归
+
+   
 
 ## build optimizer
+
+构建优化器，默认是SGD
+
 ```python
 def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimizer:
     """
@@ -83,6 +99,9 @@ Mapper data augmentation: the data from data loader is light weight format.
 To get the image we have to use the DatasetMapper which will read the image from disk and do some
 augmentations to it.
 ## build lr_scheduler
+
+构建学习率调节器
+
 ```python
 def build_lr_scheduler(
     cfg: CfgNode, optimizer: torch.optim.Optimizer
@@ -112,8 +131,14 @@ def build_lr_scheduler(
         raise ValueError("Unknown LR scheduler: {}".format(name))
 ```
 WarmupMultiStepLR
+
+
+
 # training
 ## process image
+
+归一化，并对图像进行 pad, 满足 下采样条件。 
+
 ```python
  def preprocess_image(self, batched_inputs: Tuple[Dict[str, Tensor]]):
         """
@@ -125,6 +150,9 @@ WarmupMultiStepLR
         return images
 ```
 ## backbone feature from resnet and fpn
+
+提取经过 resnet 和 fun 增强的特征金字塔
+
 ```python
 features = self.backbone(images.tensor)
 ```
@@ -133,6 +161,9 @@ features = self.backbone(images.tensor)
 ## predict logits and box delta using retinanet head
 
 ## match anchor with ground truth
+
+将 anchor 和 ground truth 进行匹配，从而生成每个 anchor 训练的时候需要的类别标签和回顾目标。
+
 ```python
 gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
 ```
@@ -184,6 +215,9 @@ gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
 ```
 
 ## calculate loss
+
+计算损失函数，根据 retinanet head 预测的类别和标签结果和前面匹配的真实类别和回归目标分别计算 focal loss 和 smooth l1 loss
+
 ```python
  def losses(self, anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes):
         """
@@ -252,3 +286,4 @@ gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
         }
 
 ```
+
