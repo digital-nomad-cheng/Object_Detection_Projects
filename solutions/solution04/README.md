@@ -86,7 +86,7 @@ data_loader = self.build_train_loader(cfg)
 ## build model
 
 1. build retinanet backbone
-   
+  
    使用 resnet 提取基础特征，然后使用 FPN 对特征进行增强，并在 res3, res4, res5 基础上增加两个 stride 2 卷积，进一步对 feature map 进行下采样
    
    ```python
@@ -178,10 +178,15 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
     )
 ```
 ## build data loader
-Aspect ratio grouping
-Mapper data augmentation: the data from data loader is light weight format. 
-To get the image we have to use the DatasetMapper which will read the image from disk and do some
-augmentations to it.
+
+data loader 中读取的数据是轻量结构，此时图片没有从磁盘中读入。需要使用DatasetMapper读入图像并进行一系列增强处理。
+
+增强的配置：
+
+
+
+
+
 ## build lr_scheduler
 
 构建学习率调节器
@@ -251,13 +256,13 @@ return [RotatedBoxes(x) for x in anchors_over_all_feature_maps]
 ## predict logits and box delta using retinanet head
 
  ```python
-    logits = []
-        bbox_reg = []
-        for feature in features:
-            logits.append(self.cls_score(self.cls_subnet(feature)))
-            bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
-        return logits, bbox_reg
-   ```
+  logits = []
+  bbox_reg = []
+  for feature in features:
+    logits.append(self.cls_score(self.cls_subnet(feature)))
+    bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+    return logits, bbox_reg
+ ```
 
 ## match anchor with ground truth
 
