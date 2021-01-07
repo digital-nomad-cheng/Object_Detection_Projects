@@ -79,7 +79,9 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
 ```
 ## build data loader
 Aspect ratio grouping
-Mapper data augmentation
+Mapper data augmentation: the data from data loader is light weight format. 
+To get the image we have to use the DatasetMapper which will read the image from disk and do some
+augmentations to it.
 ## build lr_scheduler
 ```python
 def build_lr_scheduler(
@@ -109,5 +111,144 @@ def build_lr_scheduler(
     else:
         raise ValueError("Unknown LR scheduler: {}".format(name))
 ```
-
+WarmupMultiStepLR
 # training
+## process image
+```python
+ def preprocess_image(self, batched_inputs: Tuple[Dict[str, Tensor]]):
+        """
+        Normalize, pad and batch the input images.
+        """
+        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = [(x - self.pixel_mean) / self.pixel_std for x in images]
+        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        return images
+```
+## backbone feature from resnet and fpn
+```python
+features = self.backbone(images.tensor)
+```
+## generate anchors
+
+## predict logits and box delta using retinanet head
+
+## match anchor with ground truth
+```python
+gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
+```
+```python
+    def label_anchors(self, anchors, gt_instances):
+        """
+        Args:
+            anchors (list[Boxes]): A list of #feature level Boxes.
+                The Boxes contains anchors of this image on the specific feature level.
+            gt_instances (list[Instances]): a list of N `Instances`s. The i-th
+                `Instances` contains the ground-truth per-instance annotations
+                for the i-th input image.
+
+        Returns:
+            list[Tensor]:
+                List of #img tensors. i-th element is a vector of labels whose length is
+                the total number of anchors across all feature maps (sum(Hi * Wi * A)).
+                Label values are in {-1, 0, ..., K}, with -1 means ignore, and K means background.
+            list[Tensor]:
+                i-th element is a Rx4 tensor, where R is the total number of anchors across
+                feature maps. The values are the matched gt boxes for each anchor.
+                Values are undefined for those anchors not labeled as foreground.
+        """
+        anchors = Boxes.cat(anchors)  # Rx4
+
+        gt_labels = []
+        matched_gt_boxes = []
+        for gt_per_image in gt_instances:
+            match_quality_matrix = pairwise_iou(gt_per_image.gt_boxes, anchors)
+            matched_idxs, anchor_labels = self.anchor_matcher(match_quality_matrix)
+            del match_quality_matrix
+
+            if len(gt_per_image) > 0:
+                matched_gt_boxes_i = gt_per_image.gt_boxes.tensor[matched_idxs]
+
+                gt_labels_i = gt_per_image.gt_classes[matched_idxs]
+                # Anchors with label 0 are treated as background.
+                gt_labels_i[anchor_labels == 0] = self.num_classes
+                # Anchors with label -1 are ignored.
+                gt_labels_i[anchor_labels == -1] = -1
+            else:
+                matched_gt_boxes_i = torch.zeros_like(anchors.tensor)
+                gt_labels_i = torch.zeros_like(matched_idxs) + self.num_classes
+
+            gt_labels.append(gt_labels_i)
+            matched_gt_boxes.append(matched_gt_boxes_i)
+
+        return gt_labels, matched_gt_boxes
+```
+
+## calculate loss
+```python
+ def losses(self, anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes):
+        """
+        Args:
+            anchors (list[Boxes]): a list of #feature level Boxes
+            gt_labels, gt_boxes: see output of :meth:`RetinaNet.label_anchors`.
+                Their shapes are (N, R) and (N, R, 4), respectively, where R is
+                the total number of anchors across levels, i.e. sum(Hi x Wi x Ai)
+            pred_logits, pred_anchor_deltas: both are list[Tensor]. Each element in the
+                list corresponds to one level and has shape (N, Hi * Wi * Ai, K or 4).
+                Where K is the number of classes used in `pred_logits`.
+
+        Returns:
+            dict[str, Tensor]:
+                mapping from a named loss to a scalar tensor
+                storing the loss. Used during training only. The dict keys are:
+                "loss_cls" and "loss_box_reg"
+        """
+        num_images = len(gt_labels)
+        gt_labels = torch.stack(gt_labels)  # (N, R)
+        anchors = type(anchors[0]).cat(anchors).tensor  # (R, 4)
+        gt_anchor_deltas = [self.box2box_transform.get_deltas(anchors, k) for k in gt_boxes]
+        gt_anchor_deltas = torch.stack(gt_anchor_deltas)  # (N, R, 4)
+
+        valid_mask = gt_labels >= 0
+        pos_mask = (gt_labels >= 0) & (gt_labels != self.num_classes)
+        num_pos_anchors = pos_mask.sum().item()
+        get_event_storage().put_scalar("num_pos_anchors", num_pos_anchors / num_images)
+        self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
+            1 - self.loss_normalizer_momentum
+        ) * max(num_pos_anchors, 1)
+
+        # classification and regression loss
+        gt_labels_target = F.one_hot(gt_labels[valid_mask], num_classes=self.num_classes + 1)[
+            :, :-1
+        ]  # no loss for the last (background) class
+        loss_cls = sigmoid_focal_loss_jit(
+            cat(pred_logits, dim=1)[valid_mask],
+            gt_labels_target.to(pred_logits[0].dtype),
+            alpha=self.focal_loss_alpha,
+            gamma=self.focal_loss_gamma,
+            reduction="sum",
+        )
+
+        if self.box_reg_loss_type == "smooth_l1":
+            loss_box_reg = smooth_l1_loss(
+                cat(pred_anchor_deltas, dim=1)[pos_mask],
+                gt_anchor_deltas[pos_mask],
+                beta=self.smooth_l1_beta,
+                reduction="sum",
+            )
+        elif self.box_reg_loss_type == "giou":
+            pred_boxes = [
+                self.box2box_transform.apply_deltas(k, anchors)
+                for k in cat(pred_anchor_deltas, dim=1)
+            ]
+            loss_box_reg = giou_loss(
+                torch.stack(pred_boxes)[pos_mask], torch.stack(gt_boxes)[pos_mask], reduction="sum"
+            )
+        else:
+            raise ValueError(f"Invalid bbox reg loss type '{self.box_reg_loss_type}'")
+
+        return {
+            "loss_cls": loss_cls / self.loss_normalizer,
+            "loss_box_reg": loss_box_reg / self.loss_normalizer,
+        }
+
+```
