@@ -180,10 +180,50 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
 ## build data loader
 
 data loader 中读取的数据是轻量结构，此时图片没有从磁盘中读入。需要使用DatasetMapper读入图像并进行一系列增强处理。
+```python
+# dataset_mapper.py
+
+
+dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
+# USER: Write your own image loading if it's not from a file
+image = utils.read_image(dataset_dict["file_name"], format=self.image_format)
+utils.check_image_size(dataset_dict, image)
+
+aug_input = T.AugInput(image, sem_seg=sem_seg_gt)
+transforms = self.augmentations(aug_input)
+image, sem_seg_gt = aug_input.image, aug_input.sem_seg
+```
 
 增强的配置：
+Trainer -> build_detection_train_loader(cfg) -> @configurable(from_config=_train_loader_from_config)
+Use decorator to pass arguments from config file.
+```python
+def build_augmentation(cfg, is_train):
+    """
+    Create a list of default :class:`Augmentation` from config.
+    Now it includes resizing and flipping.
 
-
+    Returns:
+        list[Augmentation]
+    """
+    if is_train:
+        min_size = cfg.INPUT.MIN_SIZE_TRAIN
+        max_size = cfg.INPUT.MAX_SIZE_TRAIN
+        sample_style = cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING
+    else:
+        min_size = cfg.INPUT.MIN_SIZE_TEST
+        max_size = cfg.INPUT.MAX_SIZE_TEST
+        sample_style = "choice"
+    augmentation = [T.ResizeShortestEdge(min_size, max_size, sample_style)]
+    if is_train and cfg.INPUT.RANDOM_FLIP != "none":
+        augmentation.append(
+            T.RandomFlip(
+                horizontal=cfg.INPUT.RANDOM_FLIP == "horizontal",
+                vertical=cfg.INPUT.RANDOM_FLIP == "vertical",
+            )
+        )
+    return augmentation
+```
 
 
 
