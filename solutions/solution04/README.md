@@ -126,15 +126,33 @@ data_loader = self.build_train_loader(cfg)
         return [p6, p7]
    ```
    
-2. retinanet head 
+2. build retinanet head 
    retinanet head 在增强的特征基础上进行 anchor 的分类和回归
    ```python
-    logits = []
-        bbox_reg = []
-        for feature in features:
-            logits.append(self.cls_score(self.cls_subnet(feature)))
-            bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
-        return logits, bbox_reg
+    cls_subnet = []
+        bbox_subnet = []
+        for in_channels, out_channels in zip([input_shape[0].channels] + conv_dims, conv_dims):
+            cls_subnet.append(
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            )
+            if norm:
+                cls_subnet.append(get_norm(norm, out_channels))
+            cls_subnet.append(nn.ReLU())
+            bbox_subnet.append(
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            )
+            if norm:
+                bbox_subnet.append(get_norm(norm, out_channels))
+            bbox_subnet.append(nn.ReLU())
+   
+        self.cls_subnet = nn.Sequential(*cls_subnet)
+        self.bbox_subnet = nn.Sequential(*bbox_subnet)
+        self.cls_score = nn.Conv2d(
+            conv_dims[-1], num_anchors * num_classes, kernel_size=3, stride=1, padding=1
+        )
+        self.bbox_pred = nn.Conv2d(
+            conv_dims[-1], num_anchors * 4, kernel_size=3, stride=1, padding=1
+        )
    ```
    
 
@@ -217,14 +235,29 @@ WarmupMultiStepLR
 ```
 ## backbone feature from resnet and fpn
 
-提取经过 resnet 和 fun 增强的特征金字塔
+提取经过 resnet 和 fpn 增强的特征金字塔
 
 ```python
 features = self.backbone(images.tensor)
 ```
 ## generate anchors
-
+generate anchors according to feature map size, anchor size, and anchor aspect ratio. 
+```python
+# anchor_generator.py
+grid_sizes = [feature_map.shape[-2:] for feature_map in features]
+anchors_over_all_feature_maps = self._grid_anchors(grid_sizes)
+return [RotatedBoxes(x) for x in anchors_over_all_feature_maps]
+```
 ## predict logits and box delta using retinanet head
+
+ ```python
+    logits = []
+        bbox_reg = []
+        for feature in features:
+            logits.append(self.cls_score(self.cls_subnet(feature)))
+            bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+        return logits, bbox_reg
+   ```
 
 ## match anchor with ground truth
 
@@ -234,50 +267,50 @@ features = self.backbone(images.tensor)
 gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
 ```
 ```python
-    def label_anchors(self, anchors, gt_instances):
-        """
-        Args:
-            anchors (list[Boxes]): A list of #feature level Boxes.
-                The Boxes contains anchors of this image on the specific feature level.
-            gt_instances (list[Instances]): a list of N `Instances`s. The i-th
-                `Instances` contains the ground-truth per-instance annotations
-                for the i-th input image.
+ def label_anchors(self, anchors, gt_instances):
+     """
+     Args:
+         anchors (list[Boxes]): A list of #feature level Boxes.
+             The Boxes contains anchors of this image on the specific feature level.
+         gt_instances (list[Instances]): a list of N `Instances`s. The i-th
+             `Instances` contains the ground-truth per-instance annotations
+             for the i-th input image.
 
-        Returns:
-            list[Tensor]:
-                List of #img tensors. i-th element is a vector of labels whose length is
-                the total number of anchors across all feature maps (sum(Hi * Wi * A)).
-                Label values are in {-1, 0, ..., K}, with -1 means ignore, and K means background.
-            list[Tensor]:
-                i-th element is a Rx4 tensor, where R is the total number of anchors across
-                feature maps. The values are the matched gt boxes for each anchor.
-                Values are undefined for those anchors not labeled as foreground.
-        """
-        anchors = Boxes.cat(anchors)  # Rx4
+     Returns:
+         list[Tensor]:
+             List of #img tensors. i-th element is a vector of labels whose length is
+             the total number of anchors across all feature maps (sum(Hi * Wi * A)).
+             Label values are in {-1, 0, ..., K}, with -1 means ignore, and K means background.
+         list[Tensor]:
+             i-th element is a Rx4 tensor, where R is the total number of anchors across
+             feature maps. The values are the matched gt boxes for each anchor.
+             Values are undefined for those anchors not labeled as foreground.
+     """
+     anchors = Boxes.cat(anchors)  # Rx4
 
-        gt_labels = []
-        matched_gt_boxes = []
-        for gt_per_image in gt_instances:
-            match_quality_matrix = pairwise_iou(gt_per_image.gt_boxes, anchors)
-            matched_idxs, anchor_labels = self.anchor_matcher(match_quality_matrix)
-            del match_quality_matrix
+     gt_labels = []
+     matched_gt_boxes = []
+     for gt_per_image in gt_instances:
+         match_quality_matrix = pairwise_iou(gt_per_image.gt_boxes, anchors)
+         matched_idxs, anchor_labels = self.anchor_matcher(match_quality_matrix)
+         del match_quality_matrix
 
-            if len(gt_per_image) > 0:
-                matched_gt_boxes_i = gt_per_image.gt_boxes.tensor[matched_idxs]
+         if len(gt_per_image) > 0:
+             matched_gt_boxes_i = gt_per_image.gt_boxes.tensor[matched_idxs]
 
-                gt_labels_i = gt_per_image.gt_classes[matched_idxs]
-                # Anchors with label 0 are treated as background.
-                gt_labels_i[anchor_labels == 0] = self.num_classes
-                # Anchors with label -1 are ignored.
-                gt_labels_i[anchor_labels == -1] = -1
-            else:
-                matched_gt_boxes_i = torch.zeros_like(anchors.tensor)
-                gt_labels_i = torch.zeros_like(matched_idxs) + self.num_classes
+             gt_labels_i = gt_per_image.gt_classes[matched_idxs]
+             # Anchors with label 0 are treated as background.
+             gt_labels_i[anchor_labels == 0] = self.num_classes
+             # Anchors with label -1 are ignored.
+             gt_labels_i[anchor_labels == -1] = -1
+         else:
+             matched_gt_boxes_i = torch.zeros_like(anchors.tensor)
+             gt_labels_i = torch.zeros_like(matched_idxs) + self.num_classes
 
-            gt_labels.append(gt_labels_i)
-            matched_gt_boxes.append(matched_gt_boxes_i)
+         gt_labels.append(gt_labels_i)
+         matched_gt_boxes.append(matched_gt_boxes_i)
 
-        return gt_labels, matched_gt_boxes
+     return gt_labels, matched_gt_boxes
 ```
 
 ## calculate loss
@@ -350,6 +383,5 @@ gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
             "loss_cls": loss_cls / self.loss_normalizer,
             "loss_box_reg": loss_box_reg / self.loss_normalizer,
         }
-
 ```
 
