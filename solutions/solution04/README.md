@@ -196,7 +196,8 @@ image, sem_seg_gt = aug_input.image, aug_input.sem_seg
 
 增强的配置：
 Trainer -> build_detection_train_loader(cfg) -> @configurable(from_config=_train_loader_from_config)
-Use decorator to pass arguments from config file.
+使用装饰器从 config 传入参数，实现动态多尺度训练和水平翻转增强。
+
 ```python
 def build_augmentation(cfg, is_train):
     """
@@ -224,8 +225,6 @@ def build_augmentation(cfg, is_train):
         )
     return augmentation
 ```
-
-
 
 ## build lr_scheduler
 
@@ -306,7 +305,7 @@ return [RotatedBoxes(x) for x in anchors_over_all_feature_maps]
 
 ## match anchor with ground truth
 
-将 anchor 和 ground truth 进行匹配，从而生成每个 anchor 训练的时候需要的类别标签和回顾目标。
+将 anchor 和 ground truth 进行匹配，从而生成每个 anchor 训练的时候需要的类别标签和回归目标。
 
 ```python
 gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
