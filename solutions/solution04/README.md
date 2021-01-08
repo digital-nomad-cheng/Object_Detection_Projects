@@ -74,6 +74,13 @@ def from_config(cls, cfg, input_shape: List[ShapeSpec]):
     bias_value = -(math.log((1 - prior_prob) / prior_prob))
     torch.nn.init.constant_(self.cls_score.bias, bias_value)
     ```
+   If we set the prior_prob to high, there will be loss explosion error:
+   ```python
+    f"Loss became infinite or NaN at iteration={self.iter}!\n"
+   FloatingPointError: Loss became infinite or NaN at iteration=42!
+   loss_dict = {'loss_cls': nan, 'loss_box_reg': nan}
+
+   ```
 # setup training
 
 构建模型，优化器，数据加载
