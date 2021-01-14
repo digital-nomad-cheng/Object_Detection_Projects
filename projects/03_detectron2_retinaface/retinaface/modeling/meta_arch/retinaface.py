@@ -434,7 +434,7 @@ class RetinaFace(nn.Module):
             reduction="sum"
         ) / max(1, self.loss_normalizer)
 
-        return {"loss_cls": loss_cls, "loss_box_reg": loss_box_reg,
+        return {"loss_cls":  loss_cls, "loss_box_reg": loss_box_reg,
                 "loss_landmark_reg": loss_landmark_reg}
 
     @torch.no_grad()

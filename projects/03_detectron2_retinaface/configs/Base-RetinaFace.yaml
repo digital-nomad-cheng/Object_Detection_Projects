@@ -11,7 +11,7 @@ DATASETS:
   TRAIN: ("widerface_train",)
   TEST: ("widerface_train",)
 DATALOADER:                                      
-  NUM_WORKERS: 8
+  NUM_WORKERS: 12
 SOLVER:
   BASE_LR: 0.001  # Note that RetinaNet uses a different default learning rate
 INPUT:
