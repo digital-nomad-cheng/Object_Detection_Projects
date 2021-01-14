@@ -1,4 +1,4 @@
-# setup config
+setup config
 
 detectron2 中 类通过 @configurable __init__和 @classmethod from_config 方法实现直接从 config 提取对应的类初始化参数。
 ```python
