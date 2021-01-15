@@ -89,6 +89,7 @@ with torch.no_grad():
     priors = prior_box.forward()
     priors = priors.cuda()
 
+
 def train():
     net.train()
     epoch = 0 + args.resume_epoch
@@ -136,11 +137,10 @@ def train():
         load_t1 = time.time()
         batch_time = load_t1 - load_t0
         eta = int(batch_time * (max_iter - iteration))
-        print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Cls: {:.4f} Box: {:.4f} Landmark: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
-              .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-                      epoch_size, iteration + 1, max_iter, cls_loss.item(),
-                      box_loss.item(), landmark_loss.item(), lr, batch_time,
-                      str(datetime.timedelta(seconds=eta))
+        print('Epoch:{:03d}/{} || Iter: {:05d}/{} || Cls: {:8.4f} Box: {:8.4f} Landmark: {:8.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
+              .format(epoch, max_epoch, iteration + 1, max_iter,
+                      cls_loss.item(), box_loss.item(), landmark_loss.item(),
+                      lr, batch_time, str(datetime.timedelta(seconds=eta))
                 )
         )
 

@@ -1,7 +1,8 @@
+from easydict import EasyDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+
 from tools.box_utils import match, log_sum_exp
 from configs.mobilenet_retinaface import cfg_mnet
 GPU = cfg_mnet['gpu_train']
@@ -30,13 +31,13 @@ class MultiBoxLoss(nn.Module):
         See: https://arxiv.org/pdf/1512.02325.pdf for more details.
     """
 
-    def __init__(self, num_classes, overlap_threshold, do_neg_mining, neg_pos_ratio):
+    def __init__(self, cfg: EasyDict):
         super(MultiBoxLoss, self).__init__()
-        self.num_classes = num_classes
-        self.threshold = overlap_threshold
-        self.do_neg_mining = do_neg_mining
-        self.neg_pos_ratio = neg_pos_ratio
-        self.variance = [0.1, 0.2]
+        self.num_classes = cfg.MODEL.num_classes
+        self.threshold = cfg.MODEL.overlap_thresholds
+        self.do_neg_mining = cfg.TRAIN.do_neg_mining
+        self.neg_pos_ratio = cfg.TRAIN.neg_pos_ratio
+        self.variance = cfg.TRAIN.encode_variance
 
     def forward(self, predictions, prior_boxes, targets):
         """Multibox Loss
