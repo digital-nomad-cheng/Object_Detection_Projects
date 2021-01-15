@@ -82,7 +82,7 @@ else:
 cudnn.benchmark = True
 
 optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
-criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
+criterion = MultiBoxLoss(num_classes, 0.35, True, 7)
 
 prior_box = PriorBox(cfg, image_size=(img_size, img_size))
 with torch.no_grad():
@@ -115,7 +115,6 @@ def train():
                 torch.save(net.state_dict(), save_folder + cfg['backbone']+ '_epoch_' + str(epoch) + '.pth')
             epoch += 1
 
-
         load_t0 = time.time()
         if iteration in stepvalues:
             step_index += 1
@@ -126,21 +125,24 @@ def train():
         images = images.cuda()
         targets = [anno.cuda() for anno in targets]
 
-        # forward
+        # forward run
         out = net(images)
-
-        # backprop
         optimizer.zero_grad()
-        loss_l, loss_c, loss_landm = criterion(out, priors, targets)
-        loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
+        cls_loss, box_loss, landmark_loss = criterion(out, priors, targets)
+        loss = cfg['loc_weight'] * cls_loss + box_loss + landmark_loss
         loss.backward()
         optimizer.step()
+
         load_t1 = time.time()
         batch_time = load_t1 - load_t0
         eta = int(batch_time * (max_iter - iteration))
-        print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
+        print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Cls: {:.4f} Box: {:.4f} Landmark: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
               .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-              epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
+                      epoch_size, iteration + 1, max_iter, cls_loss.item(),
+                      box_loss.item(), landmark_loss.item(), lr, batch_time,
+                      str(datetime.timedelta(seconds=eta))
+                )
+        )
 
     torch.save(net.state_dict(), os.path.join(save_folder, cfg['backbone'] + '_final.pth'))
 

@@ -30,16 +30,12 @@ class MultiBoxLoss(nn.Module):
         See: https://arxiv.org/pdf/1512.02325.pdf for more details.
     """
 
-    def __init__(self, num_classes, overlap_thresh, prior_for_matching, bkg_label, neg_mining, neg_pos, neg_overlap, encode_target):
+    def __init__(self, num_classes, overlap_threshold, do_neg_mining, neg_pos_ratio):
         super(MultiBoxLoss, self).__init__()
         self.num_classes = num_classes
-        self.threshold = overlap_thresh
-        self.background_label = bkg_label
-        self.encode_target = encode_target
-        self.use_prior_for_matching = prior_for_matching
-        self.do_neg_mining = neg_mining
-        self.negpos_ratio = neg_pos
-        self.neg_overlap = neg_overlap
+        self.threshold = overlap_threshold
+        self.do_neg_mining = do_neg_mining
+        self.neg_pos_ratio = neg_pos_ratio
         self.variance = [0.1, 0.2]
 
     def forward(self, predictions, prior_boxes, targets):
@@ -105,7 +101,7 @@ class MultiBoxLoss(nn.Module):
         _, loss_idx = loss_c.sort(1, descending=True)
         _, idx_rank = loss_idx.sort(1)
         num_pos = pos_boxes_mask.long().sum(1, keepdim=True)
-        num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos_boxes_mask.size(1)-1)
+        num_neg = torch.clamp(self.neg_pos_ratio*num_pos, max=pos_boxes_mask.size(1)-1)
         neg_boxes_mask = idx_rank < num_neg.expand_as(idx_rank)
 
         # 4. Classification cross entropy loss with balanced positive and negative loss
@@ -113,12 +109,12 @@ class MultiBoxLoss(nn.Module):
         neg_boxes_idx = neg_boxes_mask.unsqueeze(2).expand_as(pred_logits)
         cls_pred = pred_logits[(pos_boxes_idx+neg_boxes_idx).gt(0)].view(-1, self.num_classes)
         cls_gt = conf_t[(pos_boxes_mask+neg_boxes_mask).gt(0)]
-        loss_c = F.cross_entropy(cls_pred, cls_gt, reduction='sum')
+        cls_loss = F.cross_entropy(cls_pred, cls_gt, reduction='sum')
 
         # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
         N = max(num_pos.data.sum().float(), 1)
         box_loss /= N
-        loss_c /= N
+        cls_loss /= N
         landmark_loss /= N1
 
-        return box_loss, loss_c, landmark_loss
+        return cls_loss, box_loss, landmark_loss
