@@ -34,8 +34,8 @@ class MultiBoxLoss(nn.Module):
     def __init__(self, cfg: EasyDict):
         super(MultiBoxLoss, self).__init__()
         self.num_classes = cfg.MODEL.num_classes
-        self.threshold = cfg.MODEL.overlap_thresholds
-        self.do_neg_mining = cfg.TRAIN.do_neg_mining
+        self.threshold = cfg.TRAIN.overlap_thresholds
+        self.do_neg_mining = cfg.TRAIN.do_negative_mining
         self.neg_pos_ratio = cfg.TRAIN.neg_pos_ratio
         self.variance = cfg.TRAIN.encode_variance
 

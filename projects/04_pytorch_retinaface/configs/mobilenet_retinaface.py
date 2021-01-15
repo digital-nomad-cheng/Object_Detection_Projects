@@ -22,7 +22,14 @@ config.TRAIN.do_negative_mining = True
 config.TRAIN.neg_pos_ratio = 3
 # warmup epochs
 config.TRAIN.warmup_epochs = 10
-config.TRAIN.lr = 1e-3
+
+config.TRAIN.LR = EasyDict()
+config.TRAIN.LR.initial_lr = 1e-3
+config.TRAIN.LR.momentum = 0.9
+config.TRAIN.LR.gamma = 0.1
+config.TRAIN.LR.weight_decay = 5e-4
+config.TRAIN.LR.decay_epoch1 = 190
+config.TRAIN.LR.decay_epoch2 = 220
 
 config.MODEL = EasyDict()
 config.MODEL.backbone = "mobilenet0.25"

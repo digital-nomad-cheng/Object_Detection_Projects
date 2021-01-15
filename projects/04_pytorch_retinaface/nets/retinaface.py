@@ -47,9 +47,9 @@ class RetinaFace(nn.Module):
         super(RetinaFace, self).__init__()
         self.phase = phase
         backbone = None
-        if cfg['backbone'] == "mobilenet0.25":
+        if cfg.MODEL.backbone == "mobilenet0.25":
             backbone = MobileNetV1()
-            if cfg['pretrained']:
+            if cfg.TRAIN.pretrained:
                 ckpt = torch.load('./pretrained_weights/mobilenetv10.25.pth',
                     map_location=torch.device('cpu')
                 )
@@ -58,12 +58,12 @@ class RetinaFace(nn.Module):
                     name = k[7:] # remove module
                     state_dict[name] = v
                 backbone.load_state_dict(state_dict)
-        elif cfg['backbone'] == "resnet50":
+        elif cfg.MODEL.backbone == "resnet50":
             backbone = torchvision.models.resnet50(pretrained=cfg['pretrained'])
         
-        self.features = IntermediateLayerGetter(backbone, cfg['return_layers'])
-        in_channels_list = cfg['in_channels_list']
-        out_channels = cfg['out_channels']
+        self.features = IntermediateLayerGetter(backbone, cfg.MODEL.return_layers)
+        in_channels_list = cfg.MODEL.in_channels_list
+        out_channels = cfg.MODEL.out_channels
         self.fpn = FPN(in_channels_list, out_channels)
         self.ssh1 = SSH(out_channels, out_channels)
         self.ssh2 = SSH(out_channels, out_channels)

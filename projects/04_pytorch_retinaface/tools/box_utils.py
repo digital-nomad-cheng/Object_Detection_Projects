@@ -92,7 +92,7 @@ def matrix_iof(a, b):
     return area_i / np.maximum(area_a[:, np.newaxis], 1)
 
 
-def match(threshold,
+def match(thresholds,
           gt_boxes,
           prior_boxes,
           variances,
@@ -152,7 +152,7 @@ def match(threshold,
 
     matched_boxes = gt_boxes[best_truth_idx]  # shape: [num_priors,4]
     matched_labels = gt_labels[best_truth_idx]  # shape: [num_priors]
-    matched_labels[best_truth_overlap < threshold] = 0  # label as background overlap < 0.35
+    matched_labels[best_truth_overlap < thresholds[0]] = 0  # label as background overlap < 0.35
 
     encoded_boxes = encode(matched_boxes, prior_boxes, variances)
     matched_landmarks = gt_landmarks[best_truth_idx]
@@ -341,7 +341,7 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
     return keep, count
 
 
-def py_cpu_nms(dets, thresh):
+def py_cpu_nms(dets, threshold):
     """Pure Python NMS baseline."""
     x1 = dets[:, 0]
     y1 = dets[:, 1]
@@ -366,7 +366,7 @@ def py_cpu_nms(dets, thresh):
         inter = w * h
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
-        inds = np.where(ovr <= thresh)[0]
+        inds = np.where(ovr <= threshold)[0]
         order = order[inds + 1]
 
     return keep
