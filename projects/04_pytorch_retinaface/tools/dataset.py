@@ -38,6 +38,7 @@ class WiderFaceDetection(data.Dataset):
 
     def __getitem__(self, index):
         img = cv2.imread(self.imgs_path[index])
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         height, width, _ = img.shape
 
         labels = self.words[index]
@@ -63,6 +64,7 @@ class WiderFaceDetection(data.Dataset):
             annotation[0, 11] = label[14]  # l3_y
             annotation[0, 12] = label[16]  # l4_x
             annotation[0, 13] = label[17]  # l4_y
+            
             if (annotation[0, 4]<0):
                 annotation[0, 14] = -1
             else:

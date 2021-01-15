@@ -100,14 +100,14 @@ class RetinaFace(nn.Module):
 
         features = [self.ssh1(fpn[0]), self.ssh2(fpn[1]), self.ssh3(fpn[2])]
 
-        classification = torch.cat([self.cls_heads[i](f) 
-            for i, f in enumerate(features)], dim=1
+        classification = torch.cat(
+            [self.cls_heads[i](f) for i, f in enumerate(features)], dim=1
         )
-        bbox_regression = torch.cat([self.bbox_heads[i](f)
-            for i, f in enumerate(features)], dim=1
+        bbox_regression = torch.cat(
+            [self.bbox_heads[i](f) for i, f in enumerate(features)], dim=1
         )
-        ldmk_regresson = torch.cat([self.ldmk_heads[i](f)
-            for i, f in enumerate(features)], dim=1
+        ldmk_regression = torch.cat(
+            [self.ldmk_heads[i](f) for i, f in enumerate(features)], dim=1
         )
 
         if self.phase == 'train':

@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 def ConvBN(inp, oup, kernel_size=3, stride=1, leaky=0.1):
     return nn.Sequential(
@@ -7,12 +9,14 @@ def ConvBN(inp, oup, kernel_size=3, stride=1, leaky=0.1):
         nn.BatchNorm2d(oup)
     )
 
-def ConvBNReLU(inp, oup, kernel_size=3, stride=1, leaky=0):
+
+def ConvBNReLU(inp, oup, kernel_size=3, stride=1, leaky=0, padding=1):
     return nn.Sequential(
-        nn.Conv2d(inp, oup, kernel_size, stride, 1, bias=False),
+        nn.Conv2d(inp, oup, kernel_size, stride, padding, bias=False),
         nn.BatchNorm2d(oup),
         nn.LeakyReLU(negative_slope=leaky, inplace=True)
     )
+
 
 def DepthWiseConv(inp, oup, stride, leaky=0.1):
     return nn.Sequential(
@@ -27,6 +31,7 @@ def DepthWiseConv(inp, oup, stride, leaky=0.1):
         nn.LeakyReLU(negative_slope=leaky, inplace=True)
     )
 
+
 class FPN(nn.Module):
     """
     Feature Pyramid Network
@@ -36,9 +41,9 @@ class FPN(nn.Module):
         leaky = 0
         if (out_channels <= 64):
             leaky = 0.1
-        self.lateral1 = ConvBNReLU(in_channels_list[0], out_channels, 1, 1, leaky)
-        self.lateral2 = ConvBNReLU(in_channels_list[1], out_channels, 1, 1, leaky)
-        self.lateral3 = ConvBNReLU(in_channels_list[2], out_channels, 1, 1, leaky)
+        self.lateral1 = ConvBNReLU(in_channels_list[0], out_channels, 1, 1, leaky, 0)
+        self.lateral2 = ConvBNReLU(in_channels_list[1], out_channels, 1, 1, leaky, 0)
+        self.lateral3 = ConvBNReLU(in_channels_list[2], out_channels, 1, 1, leaky, 0)
 
         self.out_conv1 = ConvBNReLU(out_channels, out_channels, 3, leaky=leaky)
         self.out_conv2 = ConvBNReLU(out_channels, out_channels, 3, leaky=leaky)
@@ -49,7 +54,7 @@ class FPN(nn.Module):
         """
         
         # Todo: compare with official implementation
-        inputs = features.values()
+        inputs = list(features.values())
         
         output1 = self.lateral1(inputs[0])
         output2 = self.lateral2(inputs[1])
@@ -64,6 +69,7 @@ class FPN(nn.Module):
         output1 = self.out_conv1(output1)
 
         return [output1, output2, output3]
+
 
 class SSH(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -95,6 +101,7 @@ class SSH(nn.Module):
         out = F.relu(out)
 
         return out
+
 
 class MobileNetV1(nn.Module):
     def __init__(self):
