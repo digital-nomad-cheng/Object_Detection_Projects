@@ -119,8 +119,8 @@ def train():
         eta = int(batch_time * (max_iter - iteration))
         print('Epoch:{:03d}/{} || Iter: {:05d}/{} || Cls: {:8.4f} Box: {:8.4f} Landmark: {:8.4f} || LR: {:.8f} || \
             Batchtime: {:.4f} s || ETA: {}'.format(epoch, cfg.TRAIN.epochs, iteration + 1, max_iter,
-                      cls_loss.item(), box_loss.item(), landmark_loss.item(),
-                      lr, batch_time, str(datetime.timedelta(seconds=eta))
+                                                   cls_loss.item(), box_loss.item(), landmark_loss.item(),
+                                                   lr, batch_time, str(datetime.timedelta(seconds=eta))
                 )
         )
 
@@ -138,7 +138,7 @@ def adjust_learning_rate(cfg, optimizer, epoch, step_index, iteration, epoch_siz
     if epoch <= warmup_epochs:
         lr = 1e-6 + (initial_lr-1e-6) * iteration / (epoch_size * warmup_epochs)
     else:
-        lr = initial_lr * (gamma ** (step_index))
+        lr = initial_lr * (gamma ** step_index)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr

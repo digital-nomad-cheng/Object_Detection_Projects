@@ -50,7 +50,7 @@ class RetinaFace(nn.Module):
         if cfg.MODEL.backbone == "mobilenet0.25":
             backbone = MobileNetV1()
             if cfg.TRAIN.pretrained:
-                ckpt = torch.load('./pretrained_weights/mobilenetv10.25.pth',
+                ckpt = torch.load('./pretrained_weights/mobilenetV1X0.25_pretrain.tar',
                     map_location=torch.device('cpu')
                 )
                 state_dict = OrderedDict()

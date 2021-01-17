@@ -22,7 +22,7 @@ config.TRAIN.do_negative_mining = True
 config.TRAIN.neg_pos_ratio = 3
 # warmup epochs
 config.TRAIN.warmup_epochs = 10
-
+# learning rate related parameters
 config.TRAIN.LR = EasyDict()
 config.TRAIN.LR.initial_lr = 1e-3
 config.TRAIN.LR.momentum = 0.9
@@ -46,26 +46,9 @@ config.MODEL.return_layers = {'stage1': 1, 'stage2': 2, 'stage3': 3}
 
 config.DATA = EasyDict()
 # training image size, if the image size is not fixed, we have to generate anchors for each input
-config.DATA.image_size = 640
+config.DATA.image_size = (640, 640)
 config.DATA.rgb_mean = (127.5, 127.5, 127.5)
 
 
-cfg_mnet = {
-    'backbone': 'mobilenet0.25',
-    'min_sizes': [[16, 32], [64, 128], [256, 512]],
-    'steps': [8, 16, 32],
-    'variance': [0.1, 0.2],
-    'clip': False,
-    'loc_weight': 2.0,
-    'gpu_train': True,
-    'batch_size': 64,
-    'ngpu': 1,
-    'epoch': 250,
-    'decay1': 190,
-    'decay2': 220,
-    'image_size': 640,
-    'pretrained': False,
-    'return_layers': {'stage1': 1, 'stage2': 2, 'stage3': 3},
-    'in_channels_list': [64, 128, 256],
-    'out_channels': 64
-}
+config.TEST = EasyDict()
+config.TEST.confidence_threshold = 0.02

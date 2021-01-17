@@ -5,6 +5,7 @@ import torch.utils.data as data
 import cv2
 import numpy as np
 
+
 class WiderFaceDetection(data.Dataset):
     def __init__(self, data_root, anno_file, preproc=None):
         self.preproc = preproc

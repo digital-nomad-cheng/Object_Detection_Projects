@@ -6,20 +6,20 @@ import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
 
-from configs.mobilenet_retinaface import cfg_mnet
+from configs.mobilenet_retinaface import config as cfg
 from layers.prior_box import PriorBox
 from nets.retinaface import RetinaFace
 from tools.box_utils import decode, decode_landmark, py_cpu_nms
 from tools.timer import Timer
 
-parser = argparse.ArgumentParser(description='Retinaface')
-parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
+parser = argparse.ArgumentParser(description='RetinaFace')
+parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_final.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--save_folder', default='./model_eval/widerface_evaluate/widerface_txt/', type=str, help='Dir to save txt results')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
 parser.add_argument('--dataset_folder', default='./data/widerface/val/', type=str, help='dataset path')
-parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
+parser.add_argument('--confidence_threshold', default=0.5, type=float, help='confidence_threshold')
 parser.add_argument('--top_k', default=5000, type=int, help='top_k')
 parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_threshold')
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
@@ -67,11 +67,6 @@ def load_model(model, pretrained_path, load_to_cpu):
 if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
-    cfg = None
-    if args.network == "mobile0.25":
-        cfg = cfg_mnet
-
-    # net and model
     net = RetinaFace(cfg=cfg, phase='test')
     net = load_model(net, args.trained_model, args.cpu)
     net.eval()
@@ -103,11 +98,13 @@ if __name__ == '__main__':
         image_path = os.path.join(dataset_folder, "images", img_name)
         img_bgr = cv2.imread(image_path)
         img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        img = np.float32(img_bgr)
+        # img = cv2.resize(img, (cfg.DATA.image_size, cfg.DATA.image_size))
+
+        img = np.float32(img)
 
         im_height, im_width, _ = img.shape
-
-        img -= (127.5, 127.5, 127.5)
+        cfg.DATA.image_size = img.shape[0:2]
+        img -= cfg.DATA.rgb_mean
         img = img.transpose(2, 0, 1)
         img = torch.from_numpy(img).unsqueeze(0)
         img = img.to(device)
@@ -118,16 +115,16 @@ if __name__ == '__main__':
         torch.cuda.synchronize()
         timer['forward_pass'].toc()
         timer['misc'].tic()
-        prior_box = PriorBox(cfg, image_size=(im_height, im_width))
+        prior_box = PriorBox(cfg)
         priors = prior_box.forward()
         priors = priors.to(device)
         prior_data = priors.data
-        boxes = decode(offsets.data.squeeze(0), prior_data, cfg['variance'])
+        boxes = decode(offsets.data.squeeze(0), prior_data, cfg.TRAIN.encode_variance)
         scale = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2]])
         boxes = boxes * scale.to(device)
         boxes = boxes.cpu().numpy()
         scores = logits.squeeze(0).data.cpu().numpy()[:, 1]
-        landmarks = decode_landmark(landmarks.data.squeeze(0), prior_data, cfg['variance'])
+        landmarks = decode_landmark(landmarks.data.squeeze(0), prior_data, cfg.TRAIN.encode_variance)
         scale = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
                                img.shape[3], img.shape[2], img.shape[3], img.shape[2],
                                img.shape[3], img.shape[2]])

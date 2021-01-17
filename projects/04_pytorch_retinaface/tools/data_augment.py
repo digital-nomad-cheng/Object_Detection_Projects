@@ -1,3 +1,5 @@
+from typing import List
+
 import cv2
 import numpy as np
 import random
@@ -59,10 +61,9 @@ def _crop(image, boxes, labels, landm, img_dim):
         landms_t[:, :, :2] = np.minimum(landms_t[:, :, :2], roi[2:] - roi[:2])
         landms_t = landms_t.reshape([-1, 10])
 
-
-	# make sure that the cropped image contains at least one face > 16 pixel at training image scale
-        b_w_t = (boxes_t[:, 2] - boxes_t[:, 0] + 1) / w * img_dim
-        b_h_t = (boxes_t[:, 3] - boxes_t[:, 1] + 1) / h * img_dim
+        # make sure that the cropped image contains at least one face > 16 pixel at training image scale
+        b_w_t = (boxes_t[:, 2] - boxes_t[:, 0] + 1) / w * img_dim[1]
+        b_h_t = (boxes_t[:, 3] - boxes_t[:, 1] + 1) / h * img_dim[0]
         mask_b = np.minimum(b_w_t, b_h_t) > 0.0
         boxes_t = boxes_t[mask_b]
         labels_t = labels_t[mask_b]
@@ -197,10 +198,10 @@ def _pad_to_square(image, rgb_mean, pad_image_flag):
     return image_t
 
 
-def _resize_subtract_mean(image, insize, rgb_mean):
+def _resize_subtract_mean(image, target_size: List, rgb_mean):
     interp_methods = [cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_NEAREST, cv2.INTER_LANCZOS4]
     interp_method = interp_methods[random.randrange(5)]
-    image = cv2.resize(image, (insize, insize), interpolation=interp_method)
+    image = cv2.resize(image, tuple(target_size), interpolation=interp_method)
     image = image.astype(np.float32)
     image -= rgb_mean
     return image.transpose(2, 0, 1)
@@ -208,8 +209,8 @@ def _resize_subtract_mean(image, insize, rgb_mean):
 
 class preproc(object):
 
-    def __init__(self, img_dim, rgb_means):
-        self.img_dim = img_dim
+    def __init__(self, img_size, rgb_means):
+        self.img_size = img_size
         self.rgb_means = rgb_means
 
     def __call__(self, image, targets):
@@ -219,12 +220,12 @@ class preproc(object):
         labels = targets[:, -1].copy()
         landm = targets[:, 4:-1].copy()
 
-        image_t, boxes_t, labels_t, landm_t, pad_image_flag = _crop(image, boxes, labels, landm, self.img_dim)
+        image_t, boxes_t, labels_t, landm_t, pad_image_flag = _crop(image, boxes, labels, landm, self.img_size)
         image_t = _distort(image_t)
-        image_t = _pad_to_square(image_t,self.rgb_means, pad_image_flag)
+        image_t = _pad_to_square(image_t, self.rgb_means, pad_image_flag)
         image_t, boxes_t, landm_t = _mirror(image_t, boxes_t, landm_t)
         height, width, _ = image_t.shape
-        image_t = _resize_subtract_mean(image_t, self.img_dim, self.rgb_means)
+        image_t = _resize_subtract_mean(image_t, self.img_size, self.rgb_means)
         boxes_t[:, 0::2] /= width
         boxes_t[:, 1::2] /= height
 

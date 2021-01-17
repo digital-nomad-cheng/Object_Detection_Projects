@@ -4,8 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from tools.box_utils import match, log_sum_exp
-from configs.mobilenet_retinaface import cfg_mnet
-GPU = cfg_mnet['gpu_train']
 
 
 class MultiBoxLoss(nn.Module):
@@ -38,6 +36,7 @@ class MultiBoxLoss(nn.Module):
         self.do_neg_mining = cfg.TRAIN.do_negative_mining
         self.neg_pos_ratio = cfg.TRAIN.neg_pos_ratio
         self.variance = cfg.TRAIN.encode_variance
+        self.use_gpu = cfg.TRAIN.use_gpu
 
     def forward(self, predictions, prior_boxes, targets):
         """Multibox Loss
@@ -68,7 +67,8 @@ class MultiBoxLoss(nn.Module):
             defaults = prior_boxes.data  # Todo: why data
             # match prior box with predictions
             match(self.threshold, gt_boxes, defaults, self.variance, gt_labels, gt_landmarks, loc_t, conf_t, landm_t, idx)
-        if GPU:
+
+        if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
             landm_t = landm_t.cuda()
