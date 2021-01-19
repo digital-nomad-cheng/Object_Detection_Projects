@@ -4,18 +4,19 @@ import numpy as np
 from math import ceil
 
 
-class PriorBox(object):
+class AnchorGenerator(object):
     """Anchor generator"""
-    def __init__(self, cfg, phase='train'):
-        super(PriorBox, self).__init__()
+    def __init__(self, cfg):
+        super(AnchorGenerator, self).__init__()
         self.min_sizes = cfg.MODEL.anchor_sizes
         self.steps = cfg.MODEL.strides
         self.clip = cfg.TRAIN.clip_box
         self.image_size = cfg.DATA.image_size
         self.feature_maps = [[ceil(self.image_size[0]/step), ceil(self.image_size[1]/step)] for step in self.steps]
         self.name = "s"
+        self.use_gpu = cfg.TRAIN.use_gpu
 
-    def forward(self):
+    def generate_anchors(self):
         anchors = []
         for k, f in enumerate(self.feature_maps):
             min_sizes = self.min_sizes[k]
@@ -30,8 +31,10 @@ class PriorBox(object):
                     for cy, cx in product(dense_cy, dense_cx):  # mesh grid
                         anchors += [cx, cy, s_kx, s_ky]
 
-        # back to torch land
         output = torch.Tensor(anchors).view(-1, 4)
         if self.clip:
             output.clamp_(max=1, min=0)
+        if self.use_gpu:
+            output = output.cuda()
+
         return output

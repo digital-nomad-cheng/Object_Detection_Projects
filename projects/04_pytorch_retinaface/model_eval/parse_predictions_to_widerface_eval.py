@@ -7,7 +7,7 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 
 from configs.mobilenet_retinaface import config as cfg
-from layers.prior_box import PriorBox
+from layers.anchor import AnchorGenerator
 from nets.retinaface import RetinaFace
 from tools.box_utils import decode, decode_landmark, py_cpu_nms
 from tools.timer import Timer
@@ -19,7 +19,7 @@ parser.add_argument('--network', default='resnet50', help='Backbone network mobi
 parser.add_argument('--save_folder', default='./model_eval/widerface_evaluate/widerface_txt/', type=str, help='Dir to save txt results')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
 parser.add_argument('--dataset_folder', default='./data/widerface/val/', type=str, help='dataset path')
-parser.add_argument('--confidence_threshold', default=0.5, type=float, help='confidence_threshold')
+parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
 parser.add_argument('--top_k', default=5000, type=int, help='top_k')
 parser.add_argument('--nms_threshold', default=0.4, type=float, help='nms_threshold')
 parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
@@ -98,7 +98,6 @@ if __name__ == '__main__':
         image_path = os.path.join(dataset_folder, "images", img_name)
         img_bgr = cv2.imread(image_path)
         img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        # img = cv2.resize(img, (cfg.DATA.image_size, cfg.DATA.image_size))
 
         img = np.float32(img)
 
@@ -115,16 +114,15 @@ if __name__ == '__main__':
         torch.cuda.synchronize()
         timer['forward_pass'].toc()
         timer['misc'].tic()
-        prior_box = PriorBox(cfg)
-        priors = prior_box.forward()
-        priors = priors.to(device)
-        prior_data = priors.data
-        boxes = decode(offsets.data.squeeze(0), prior_data, cfg.TRAIN.encode_variance)
+        anchor_generator = AnchorGenerator(cfg)
+        anchors = anchor_generator.generate_anchors()
+        anchors = anchors.to(device)
+        boxes = decode(offsets.data.squeeze(0), anchors, cfg.TRAIN.encode_variance)
         scale = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2]])
         boxes = boxes * scale.to(device)
         boxes = boxes.cpu().numpy()
         scores = logits.squeeze(0).data.cpu().numpy()[:, 1]
-        landmarks = decode_landmark(landmarks.data.squeeze(0), prior_data, cfg.TRAIN.encode_variance)
+        landmarks = decode_landmark(landmarks.data.squeeze(0), anchors, cfg.TRAIN.encode_variance)
         scale = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
                                img.shape[3], img.shape[2], img.shape[3], img.shape[2],
                                img.shape[3], img.shape[2]])

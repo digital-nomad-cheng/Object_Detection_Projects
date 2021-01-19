@@ -8,7 +8,7 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 
 from configs.mobilenet_retinaface import cfg_mnet
-from layers.prior_box import PriorBox
+from layers.anchor import PriorBox
 from tools.box_utils import py_cpu_nms
 from nets.retinaface import RetinaFace
 from tools.box_utils import decode, decode_landmark

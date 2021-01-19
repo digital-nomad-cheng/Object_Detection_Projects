@@ -14,7 +14,7 @@ from tools.dataset import WiderFaceDetection, detection_collate
 from tools.data_augment import preproc
 from configs.mobilenet_retinaface import config as cfg
 from layers.loss import MultiBoxLoss
-from layers.prior_box import PriorBox
+from layers.anchor import AnchorGenerator
 from nets.retinaface import RetinaFace
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
@@ -63,10 +63,10 @@ optimizer = optim.SGD(
     net.parameters(), lr=cfg.TRAIN.LR.initial_lr, momentum=cfg.TRAIN.LR.momentum, weight_decay=cfg.TRAIN.LR.weight_decay)
 criterion = MultiBoxLoss(cfg)
 
-prior_box = PriorBox(cfg)
+anchor_generator = AnchorGenerator(cfg)
 with torch.no_grad():
-    priors = prior_box.forward()
-    priors = priors.cuda()
+    anchors = anchor_generator.generate_anchors()
+    anchors = anchors.cuda()
 
 
 def train():
@@ -109,7 +109,7 @@ def train():
         targets = [anno.cuda() for anno in targets]
         out = net(images)
         optimizer.zero_grad()
-        cls_loss, box_loss, landmark_loss = criterion(out, priors, targets)
+        cls_loss, box_loss, landmark_loss = criterion(out, anchors, targets)
         loss = cls_loss + cfg.TRAIN.box_loss_weight*box_loss + landmark_loss
         loss.backward()
         optimizer.step()
