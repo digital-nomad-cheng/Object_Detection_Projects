@@ -17,35 +17,16 @@ class FocalLoss(nn.Module):
         """
         super(FocalLoss, self).__init__()
         self.reduction = reduction
-        self.alpha = torch.Tensor([alpha])
+        self.alpha = alpha
         self.gamma = gamma
 
     def forward(self, pred_logits, targets):
-        '''
         preds = pred_logits.sigmoid()
-        ce = F.binary_cross_entropy_with_logits(pred_logits, targets, reduction=self.reduction)
-        alpha = targets * self.alpha + (1. - self.target) * (1. - self.alpha)
+        ce = F.binary_cross_entropy_with_logits(pred_logits, targets, reduction='none')
+        alpha = targets * self.alpha + (1. - targets) * (1. - self.alpha)
         pt = torch.where(targets == 1,  preds, 1 - preds)
-        return alpha * (1. - pt) ** self.gamma * ce
-        '''
-        pred_logits = pred_logits.view(-1, pred_logits.size(-1))
-        self.alpha = self.alpha.to(pred_logits.device)
-        preds_softmax = F.softmax(pred_logits,
-                                  dim=1)  # 这里并没有直接使用log_softmax, 因为后面会用到softmax的结果(当然你也可以使用log_softmax,然后进行exp操作)
-        preds_logsoft = torch.log(preds_softmax)
-
-        preds_softmax = preds_softmax.gather(1, targets.view(-1, 1))  # 这部分实现nll_loss ( crossempty = log_softmax + nll )
-        preds_logsoft = preds_logsoft.gather(1, targets.view(-1, 1))
-        self.alpha = self.alpha.gather(0, targets.view(-1))
-        loss = -torch.mul(torch.pow((1 - preds_softmax), self.gamma),
-                          preds_logsoft)  # torch.pow((1-preds_softmax), self.gamma) 为focal loss中 (1-pt)**γ
-
-        loss = torch.mul(self.alpha, loss.t())
-        if self.reduction == 'mean':
-            loss = loss.mean()
-        elif self.reduction == 'sum':
-            loss = loss.sum()
-        return loss
+        loss = alpha * (1. - pt) ** self.gamma * ce
+        return loss.sum()
 
 
 class OHEM(nn.Module):
@@ -88,6 +69,7 @@ class MultiBoxLoss(nn.Module):
         self.neg_pos_ratio = cfg.TRAIN.neg_pos_ratio
         self.variance = cfg.TRAIN.encode_variance
         self.use_gpu = cfg.TRAIN.use_gpu
+        self.focal_loss = FocalLoss()
 
     def forward(self, predictions, anchor_boxes, targets):
         """Multibox Loss
@@ -127,9 +109,8 @@ class MultiBoxLoss(nn.Module):
         # Box regression smooth l1 loss, shape: [batch_size, num_prior_boxes, 4]
         box_loss = F.smooth_l1_loss(pos_boxes_pred, pos_boxes_gt, reduction='sum')
 
+        # if self.cls_loss_type == "OHEM":
         # 3. Online Hard Negative Mining, keep balance of nums of positive and negative samples
-        # batch_logits = pred_logits.view(-1, self.num_classes)
-        # loss_c  = log_sum_exp(batch_logits) - batch_logits.gather(1, matched_labels.view(-1, 1))
         loss_c = F.cross_entropy(pred_logits.view(-1, self.num_classes), matched_labels.view(-1), reduce=False)
         loss_c = loss_c.unsqueeze(-1)
         loss_c[pos_boxes_mask.view(-1, 1)] = 0  # filter out positive boxes and only keep negative boxes
@@ -147,7 +128,11 @@ class MultiBoxLoss(nn.Module):
         cls_gt = matched_labels[(pos_boxes_mask+neg_boxes_mask).gt(0)]
         cls_loss = F.cross_entropy(cls_pred, cls_gt, reduction='sum')
 
-        # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
+        if self.cls_loss_type == "FocalLoss":
+            matched_labels_target = F.one_hot(matched_labels.view(-1))
+            cls_loss = self.focal_loss(pred_logits.view(-1, self.num_classes), matched_labels_target.to(pred_logits.dtype))
+
+        # Sum of losses: L(x,c,l,g) = (Lcls(x, c) + αLloc(x,l,g)) / N
         N = max(num_pos.sum().float(), 1)
         box_loss /= N
         cls_loss /= N
