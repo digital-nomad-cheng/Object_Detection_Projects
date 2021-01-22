@@ -1,3 +1,4 @@
+import math
 from collections import OrderedDict
 
 import torch
@@ -75,7 +76,8 @@ class RetinaFace(nn.Module):
 
         self.cls_heads = self._make_cls_head(3, in_channels=out_channels)
         self.bbox_heads = self._make_bbox_head(3, in_channels=out_channels)
-        self.ldmk_heads= self._make_ldmk_head(3, in_channels=out_channels)
+        self.ldmk_heads = self._make_ldmk_head(3, in_channels=out_channels)
+        self._init_weights()
 
     def _make_cls_head(self, num_fpn=3, in_channels=64, num_anchor=2):
         cls_heads = nn.ModuleList()
@@ -97,6 +99,19 @@ class RetinaFace(nn.Module):
             ldmk_heads.append(LandmarkHead(in_channels, num_anchor))
 
         return ldmk_heads
+
+    def _init_weights(self):
+        # init weight for FocalLoss
+        # Use prior in model initialization to improve stability
+        prior_prob = 0.01
+        bias_value = -(math.log((1 - prior_prob) / prior_prob))
+        for modules in [self.cls_heads]:
+            for layer in modules.modules():
+                if isinstance(layer, nn.Conv2d):
+                    torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
+                    torch.nn.init.constant_(layer.bias, bias_value)
+
+
 
     def forward(self, inputs):
         features = self.features(inputs)

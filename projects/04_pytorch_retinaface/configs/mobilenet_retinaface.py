@@ -2,10 +2,10 @@ from easydict import EasyDict
 
 config = EasyDict()
 config.TRAIN = EasyDict()
-config.TRAIN.num_gpus = 1
+config.TRAIN.num_gpus = 2
 config.TRAIN.use_gpu = True
-config.TRAIN.batch_size = 32
-config.TRAIN.num_workers = 8
+config.TRAIN.batch_size = 128
+config.TRAIN.num_workers = 12
 config.TRAIN.epochs = 250
 # use pretrained backbone network
 config.TRAIN.pretrained = True
@@ -15,9 +15,9 @@ config.TRAIN.box_loss_weight = 2.0
 config.TRAIN.encode_variance = [0.1, 0.2]
 # clip box after encoding
 config.TRAIN.clip_box = True
-config.TRAIN.overlap_thresholds = [0.3, 0.5]
+config.TRAIN.overlap_thresholds = [0.35, 0.5]
 # choose classification loss between Online Hard Example Mining or Focal Loss
-config.TRAIN.cls_loss_type = "FocalLoss"  # or "FocalLoss"
+config.TRAIN.cls_loss_type = "FocalLoss"  # "OHEM" or "FocalLoss"
 # ratio of negative sample vs positive samples if choose OHEM
 config.TRAIN.neg_pos_ratio = 7
 # warmup epochs
