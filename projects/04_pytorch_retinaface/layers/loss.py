@@ -26,16 +26,47 @@ class FocalLoss(nn.Module):
         alpha = targets * self.alpha + (1. - targets) * (1. - self.alpha)
         pt = torch.where(targets == 1,  preds, 1 - preds)
         loss = alpha * (1. - pt) ** self.gamma * ce
+
+        pos_boxes_mask = targets == 1
+        num_pos = pos_boxes_mask.long().sum(1, keepdim=True)
+        N = max(num_pos.sum().float(), 1)
+        loss /= N
+
         return loss.sum()
 
 
 class OHEM(nn.Module):
-    def __init__(self):
+    def __init__(self, neg_pos_ratio, num_classes):
         super(OHEM, self).__init__()
+        self.neg_pos_ratio = neg_pos_ratio
+        self.num_classes = num_classes
 
-    def forward(self):
-        pass
+    def forward(self, pred_logits, targets):
+        batch_size = pred_logits.shape[0]
+        pos_boxes_mask = targets == 1
 
+        # Online Hard Negative Mining, keep balance of nums of positive and negative samples
+        loss_c = F.cross_entropy(pred_logits.view(-1, self.num_classes), targets.view(-1), reduce=False)
+        loss_c = loss_c.unsqueeze(-1)
+        loss_c[pos_boxes_mask.view(-1, 1)] = 0  # filter out positive boxes and only keep negative boxes
+        loss_c = loss_c.view(batch_size, -1)
+        _, loss_idx = loss_c.sort(1, descending=True)
+        _, idx_rank = loss_idx.sort(1)
+        num_pos = pos_boxes_mask.long().sum(1, keepdim=True)
+        num_neg = torch.clamp(self.neg_pos_ratio * num_pos, max=pos_boxes_mask.size(1) - 1)
+        neg_boxes_mask = idx_rank < num_neg.expand_as(idx_rank)
+
+        # Classification cross entropy loss with balanced positive and negative loss
+        pos_boxes_idx = pos_boxes_mask.unsqueeze(2).expand_as(pred_logits)
+        neg_boxes_idx = neg_boxes_mask.unsqueeze(2).expand_as(pred_logits)
+        cls_pred = pred_logits[(pos_boxes_idx + neg_boxes_idx).gt(0)].view(-1, self.num_classes)
+        cls_gt = targets[(pos_boxes_mask + neg_boxes_mask).gt(0)]
+        cls_loss = F.cross_entropy(cls_pred, cls_gt, reduction='sum')
+
+        N = max(num_pos.sum().float(), 1)
+        cls_loss /= N
+
+        return cls_loss
 
 
 class MultiBoxLoss(nn.Module):
@@ -70,9 +101,10 @@ class MultiBoxLoss(nn.Module):
         self.variance = cfg.TRAIN.encode_variance
         self.use_gpu = cfg.TRAIN.use_gpu
         self.focal_loss = FocalLoss()
+        self.ohem = OHEM(cfg.TRAIN.neg_pos_ratio, cfg.MODEL.num_classes)
 
     def forward(self, predictions, anchor_boxes, targets):
-        """Multibox Loss
+        """
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
                 and landmark preds from SSD net.
@@ -99,6 +131,7 @@ class MultiBoxLoss(nn.Module):
         pos_ldmks_gt = matched_landmarks[pos_ldmks_idx].view(-1, 10)
         # Landmark regression smooth l1 loss, shape: [batch_size, num_prior_boxes, 10]
         landmark_loss = F.smooth_l1_loss(pos_ldmks_pred, pos_ldmks_gt, reduction='sum')
+        landmark_loss /= N1
 
         # 2. calculate box loss for anchors which are above IoU threshold with ground truth boxes
         pos_boxes_mask = matched_labels != zeros  # when there landmark information is not usable, face label will be -1
@@ -108,8 +141,11 @@ class MultiBoxLoss(nn.Module):
         pos_boxes_gt = matched_boxes[pos_boxes_idx].view(-1, 4)
         # Box regression smooth l1 loss, shape: [batch_size, num_prior_boxes, 4]
         box_loss = F.smooth_l1_loss(pos_boxes_pred, pos_boxes_gt, reduction='sum')
+        num_pos = pos_boxes_mask.long().sum(1, keepdim=True)
+        N = max(num_pos.sum().float(), 1)
+        box_loss /= N
 
-        # if self.cls_loss_type == "OHEM":
+        '''
         # 3. Online Hard Negative Mining, keep balance of nums of positive and negative samples
         loss_c = F.cross_entropy(pred_logits.view(-1, self.num_classes), matched_labels.view(-1), reduce=False)
         loss_c = loss_c.unsqueeze(-1)
@@ -127,15 +163,15 @@ class MultiBoxLoss(nn.Module):
         cls_pred = pred_logits[(pos_boxes_idx+neg_boxes_idx).gt(0)].view(-1, self.num_classes)
         cls_gt = matched_labels[(pos_boxes_mask+neg_boxes_mask).gt(0)]
         cls_loss = F.cross_entropy(cls_pred, cls_gt, reduction='sum')
+        '''
+
+        if self.cls_loss_type == "OHEM":
+            cls_loss = self.ohem(pred_logits, matched_labels)
 
         if self.cls_loss_type == "FocalLoss":
             matched_labels_target = F.one_hot(matched_labels.view(-1))
             cls_loss = self.focal_loss(pred_logits.view(-1, self.num_classes), matched_labels_target.to(pred_logits.dtype))
 
         # Sum of losses: L(x,c,l,g) = (Lcls(x, c) + αLloc(x,l,g)) / N
-        N = max(num_pos.sum().float(), 1)
-        box_loss /= N
-        cls_loss /= N
-        landmark_loss /= N1
 
         return cls_loss, box_loss, landmark_loss
