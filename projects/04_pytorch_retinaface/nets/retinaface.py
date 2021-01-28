@@ -133,6 +133,6 @@ class RetinaFace(nn.Module):
             return classification, bbox_regression, ldmk_regression
 
         return F.softmax(classification, dim=-1), bbox_regression, ldmk_regression
-
+        # return F.sigmoid(classification), bbox_regression, ldmk_regression
 
 

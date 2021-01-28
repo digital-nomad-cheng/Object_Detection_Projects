@@ -22,17 +22,18 @@ class FocalLoss(nn.Module):
 
     def forward(self, pred_logits, targets):
         preds = pred_logits.sigmoid()
-        ce = F.binary_cross_entropy_with_logits(pred_logits, targets, reduction='none')
+        ce = F.binary_cross_entropy_with_logits(pred_logits, targets, reduction=self.reduction)
         alpha = targets * self.alpha + (1. - targets) * (1. - self.alpha)
         pt = torch.where(targets == 1,  preds, 1 - preds)
         loss = alpha * (1. - pt) ** self.gamma * ce
 
+        '''
         pos_boxes_mask = targets == 1
         num_pos = pos_boxes_mask.long().sum(1, keepdim=True)
         N = max(num_pos.sum().float(), 1)
-        loss /= N
-
-        return loss.sum()
+        loss = loss.sum() / N
+        '''
+        return loss.mean()
 
 
 class OHEM(nn.Module):
@@ -171,6 +172,7 @@ class MultiBoxLoss(nn.Module):
         if self.cls_loss_type == "FocalLoss":
             matched_labels_target = F.one_hot(matched_labels.view(-1))
             cls_loss = self.focal_loss(pred_logits.view(-1, self.num_classes), matched_labels_target.to(pred_logits.dtype))
+            # cls_loss *= 10
 
         # Sum of losses: L(x,c,l,g) = (Lcls(x, c) + αLloc(x,l,g)) / N
 
