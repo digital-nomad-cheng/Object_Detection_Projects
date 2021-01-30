@@ -22,8 +22,8 @@ def ltrb2xywh(boxes):
     Return:
         boxes: (tensor) Converted (cx, cy, w, h) format boxes.
     """
-    return torch.cat((boxes[:, 2:] + boxes[:, :2])/2, # cx, cy
-                     boxes[:, 2:] - boxes[:, :2], 1)  # w, h
+    return torch.cat(((boxes[:, 2:] + boxes[:, :2])/2, # cx, cy
+                     boxes[:, 2:] - boxes[:, :2]), 1)  # w, h
 
 
 def intersect(box_a, box_b):
@@ -92,6 +92,109 @@ def matrix_iof(a, b):
     return area_i / np.maximum(area_a[:, np.newaxis], 1)
 
 
+def match_atss(cfg, targets, anchor_boxes, variances):
+    """Match each prior box with the ground truth box of using ATSS strategy,
+        encode the bounding boxes, then return the matched indices
+        corresponding to both confidence and location preds.
+        Args:
+            targets: (list tensors) targets annotation. Shape: [batch_size, num_gts, 15]
+                where index 0:4 is box annotation, index 4:14 is landmarks annotation, index
+                14 is class annotation.
+            anchor_boxes: (tensor) Prior boxes from priorbox layers, Shape: [n_priors, 4].
+            variances: (tensor) Variances corresponding to each prior coord,
+                Shape: [num_priors, 4].
+        Return:
+            The matched labels, boxes and landmarks for each image.
+            batch_matched_labels: shape [batch_size, num_anchors], 0 represents background, 1 represents
+            batch_matched_boxes: shape [batch_size, num_anchors, 4]
+            batch_matched_landmarks: shape [batch_size, num_anchors, 10]
+    """
+    batch_size = len(targets)
+    num_anchors = anchor_boxes.shape[0]
+
+    batch_matched_labels = torch.LongTensor(batch_size, num_anchors)
+    batch_matched_boxes = torch.Tensor(batch_size, num_anchors, 4)
+    batch_matched_landmarks = torch.Tensor(batch_size, num_anchors, 10)
+    from math import ceil
+    image_size = cfg.DATA.image_size
+    num_levels = len(cfg.MODEL.strides)
+    feature_map_size = [[ceil(image_size[0]/step), ceil(image_size[1]/step)] for step in cfg.MODEL.strides]
+    anchor_centers = anchor_boxes[:, :2].reshape(anchor_boxes.shape[0], 1, 2)
+    anchors_cx_per_im = anchor_boxes[:, 0]
+    anchors_cy_per_im = anchor_boxes[:, 1]
+
+
+    # calculate the center distance between all anchors and ground truth boxes
+    for batch_idx in range(len(targets)):
+        gt_boxes = targets[batch_idx][:, :4]
+        ious = IoU(
+            xywh2ltrb(anchor_boxes),
+            gt_boxes
+        )
+        cls_per_img = targets[batch_idx][:, -1]
+        ldmks_per_img = targets[batch_idx][:, 4:14]
+        bboxes_per_img = targets[batch_idx][:, :4]
+        centers_per_img = ltrb2xywh(bboxes_per_img)[:, :2]
+        target_centers = centers_per_img.reshape((1, bboxes_per_img.shape[0], 2))
+        distances = (anchor_centers - target_centers).pow(2).sum(-1).sqrt()
+
+        candidate_idxs = []
+        start_idx = 0
+        for i, feature_size in enumerate(feature_map_size):
+            num_anchors_in_level = len(cfg.MODEL.anchor_sizes[i]) * feature_size[0] * feature_size[1]
+            end_idx = start_idx + num_anchors_in_level
+            distances_per_level = distances[start_idx: end_idx, :]
+            _, topk_idxs_per_level = distances_per_level.topk(9, dim=0, largest=False)
+            candidate_idxs.append(topk_idxs_per_level + start_idx)
+            start_idx = end_idx
+
+        candidate_idxs = torch.cat(candidate_idxs, dim=0)
+
+        # Using the sum of mean and standard deviation as the IoU threshold to select final positive samples
+        num_gts = bboxes_per_img.shape[0]
+        candidate_ious = ious[candidate_idxs, torch.arange(num_gts)]
+        iou_mean_per_gt = candidate_ious.mean(0)
+        iou_std_per_gt = candidate_ious.std(0)
+        iou_thresh_per_gt = iou_mean_per_gt + iou_std_per_gt
+        is_pos = candidate_ious >= iou_thresh_per_gt[None, :]
+
+        # Limiting the final positive samples’ center to object
+        for ng in range(num_gts):
+            candidate_idxs[:, ng] += ng * num_anchors
+        e_anchors_cx = anchors_cx_per_im.view(1, -1).expand(num_gts, num_anchors).contiguous().view(-1)
+        e_anchors_cy = anchors_cy_per_im.view(1, -1).expand(num_gts, num_anchors).contiguous().view(-1)
+        candidate_idxs = candidate_idxs.view(-1)
+        l = e_anchors_cx[candidate_idxs].view(-1, num_gts) - bboxes_per_img[:, 0]
+        t = e_anchors_cy[candidate_idxs].view(-1, num_gts) - bboxes_per_img[:, 1]
+        r = bboxes_per_img[:, 2] - e_anchors_cx[candidate_idxs].view(-1, num_gts)
+        b = bboxes_per_img[:, 3] - e_anchors_cy[candidate_idxs].view(-1, num_gts)
+        is_in_gts = torch.stack([l, t, r, b], dim=1).min(dim=1)[0] > 0.01
+        is_pos = is_pos & is_in_gts
+
+        # if an anchor box is assigned to multiple gts, the one with the highest IoU will be selected.
+        INF = 100000000
+        ious_inf = torch.full_like(ious, -INF).t().contiguous().view(-1)
+        index = candidate_idxs.view(-1)[is_pos.view(-1)]
+        ious_inf[index] = ious.t().contiguous().view(-1)[index]
+        ious_inf = ious_inf.view(num_gts, -1).t()
+
+        anchors_to_gt_values, anchors_to_gt_indexs = ious_inf.max(dim=1)
+        matched_cls_per_img = cls_per_img[anchors_to_gt_indexs]
+        matched_cls_per_img[anchors_to_gt_values == -INF] = 0
+        matched_bboxes_per_img = bboxes_per_img[anchors_to_gt_indexs]
+        matched_ldmks_per_img = ldmks_per_img[anchors_to_gt_indexs]
+
+        batch_matched_labels[batch_idx] = matched_cls_per_img
+        batch_matched_boxes[batch_idx] = matched_bboxes_per_img
+        batch_matched_landmarks[batch_idx] = matched_ldmks_per_img
+
+    batch_matched_labels = batch_matched_labels.cuda()
+    batch_matched_boxes = batch_matched_boxes.cuda()
+    batch_matched_landmarks = batch_matched_landmarks.cuda()
+
+    return batch_matched_labels, batch_matched_boxes, batch_matched_landmarks
+
+
 def match(thresholds, targets, anchor_boxes, variances):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
@@ -128,7 +231,11 @@ def match(thresholds, targets, anchor_boxes, variances):
         best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
 
         # ignore hard gt, if the best IoU is less than 0.2, ignore this prior box
-        valid_gt_idx = best_prior_overlap[:, 0] >= 0.2  # Todo: why?
+        # valid_gt_idx = best_prior_overlap[:, 0] >= 0.2  # Todo: why?
+
+        # Todo: Test new IoU strategy
+        valid_gt_idx = best_prior_overlap[:, 0] > thresholds[1]
+
         best_prior_idx_filter = best_prior_idx[valid_gt_idx, :]
         if best_prior_idx_filter.shape[0] <= 0:
             batch_matched_labels[idx] = 0
@@ -154,6 +261,12 @@ def match(thresholds, targets, anchor_boxes, variances):
         matched_boxes = gt_boxes[best_truth_idx]  # shape: [num_priors, 4]
         matched_labels = gt_labels[best_truth_idx]  # shape: [num_priors]
         matched_labels[best_truth_overlap < thresholds[0]] = 0  # label as background overlap < 0.35
+
+        '''
+        # Todo: Test new IoU strategy
+        matched_labels[matched_labels == 1] = 0
+        matched_labels[best_truth_overlap > thresholds[1]] = 1
+        '''
 
         encoded_boxes = encode(matched_boxes, anchor_boxes, variances)
         matched_landmarks = gt_landmarks[best_truth_idx]

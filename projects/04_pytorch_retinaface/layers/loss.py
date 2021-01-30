@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from tools.box_utils import match, log_sum_exp
+from tools.box_utils import match, log_sum_exp, match_atss
 
 
 class FocalLoss(nn.Module):
@@ -103,6 +103,7 @@ class MultiBoxLoss(nn.Module):
         self.use_gpu = cfg.TRAIN.use_gpu
         self.focal_loss = FocalLoss()
         self.ohem = OHEM(cfg.TRAIN.neg_pos_ratio, cfg.MODEL.num_classes)
+        self.cfg = cfg
 
     def forward(self, predictions, anchor_boxes, targets):
         """
@@ -118,7 +119,8 @@ class MultiBoxLoss(nn.Module):
                 shape: [batch_size,num_objs, 4+1+2*5] (last idx is the label).
         """
 
-        matched_labels, matched_boxes, matched_landmarks = match(self.thresholds, targets, anchor_boxes, self.variance)
+        # matched_labels, matched_boxes, matched_landmarks = match(self.thresholds, targets, anchor_boxes, self.variance)
+        matched_labels, matched_boxes, matched_landmarks = match_atss(self.cfg, targets, anchor_boxes, self.variance)
         pred_logits, pred_boxes, pred_landmarks = predictions
         batch_size = pred_boxes.size(0)
 
