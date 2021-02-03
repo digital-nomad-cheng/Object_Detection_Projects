@@ -123,7 +123,6 @@ def match_atss(cfg, targets, anchor_boxes, variances):
     anchors_cx_per_im = anchor_boxes[:, 0]
     anchors_cy_per_im = anchor_boxes[:, 1]
 
-
     # calculate the center distance between all anchors and ground truth boxes
     for batch_idx in range(len(targets)):
         gt_boxes = targets[batch_idx][:, :4]

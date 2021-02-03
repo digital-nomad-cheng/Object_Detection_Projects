@@ -84,6 +84,8 @@ class RetinaFace(nn.Module):
         for i in range(num_fpn):
             cls_heads.append(ClassHead(in_channels, num_anchor))
 
+
+
         return cls_heads
 
     def _make_bbox_head(self, num_fpn=3, in_channels=64, num_anchor=2):
@@ -110,8 +112,6 @@ class RetinaFace(nn.Module):
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
                     torch.nn.init.constant_(layer.bias, bias_value)
-
-
 
     def forward(self, inputs):
         features = self.features(inputs)

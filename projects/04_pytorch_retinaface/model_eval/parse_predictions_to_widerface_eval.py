@@ -13,7 +13,7 @@ from tools.box_utils import decode, decode_landmark, py_cpu_nms
 from tools.timer import Timer
 
 parser = argparse.ArgumentParser(description='RetinaFace')
-parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_final.pth',
+parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_final_ATSS_ohem.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--save_folder', default='./model_eval/widerface_evaluate/widerface_txt/', type=str, help='Dir to save txt results')
